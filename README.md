@@ -1,7 +1,7 @@
-nanotts
+NanoTTS
 =======
 
-Improved SVOX PicoTTS speech synthesizer
+Speech synthesizer commandline utility that improves pico2wave, included with SVOX PicoTTS 
 
 
 ## Goal 
@@ -15,7 +15,7 @@ Ideally, add features to aid automatic parsing of large text-files (50k+ words) 
 Steps: 
 - [x] get a bare-bones working implementation of picotts, sans cruft
 - [ ] create a cmdline interface file that exemplifies canonical Unix-isms, like reading from stdin, writing to stdout, versatile command parsing
-- [ ] cmdline switches to (optionally):
+- [ ] implement cmdline switches that do:
     - [ ] select voice
     - [ ] set voice file directory path
     - [ ] set .wav name '-o file.wav' 
@@ -27,7 +27,7 @@ Steps:
     - [ ] slow-down/speed-up speaking rate of voice
     - [ ] bit-rate, frequency, channel, parms for .wav 
 
-Advanced/overkill options:
+Advanced/overkill wish-list features:
 - [ ] mp3 output 
 - [ ] store base settings in $HOME/.config type file, so you dont have to type language prefs every time
 - [ ] advanced feature to carve up large text-file into set of auto-named .mp3
