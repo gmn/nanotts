@@ -15,21 +15,23 @@ Ideally, add features to aid automatic parsing of large text-files (50k+ words) 
 Steps: 
 - [x] get a bare-bones working implementation of picotts, sans cruft
 - [ ] create a cmdline interface file that exemplifies canonical Unix-isms, like reading from stdin, writing to stdout, versatile command parsing
-- [ ] cmdline switches to:
+- [ ] cmdline switches to (optionally):
     - [ ] select voice
-    - [ ] set voice file directory
+    - [ ] set voice file directory path
+    - [ ] set .wav name '-o file.wav' 
     - [ ] read from text file input
-    - [ ] send sound to system playback instead of write PCM/WAV
-    - [ ] on both Mac & Linux
+    - [ ] system playback instead of writing WAV output
+    - [ ] on both Mac, Linux, multiple Linux sound systems
     - [ ] write PCM/WAV to stdout
+    - [ ] print detailed help
     - [ ] slow-down/speed-up speaking rate of voice
-    - [ ] bit-rate, frequency params for .wav 
+    - [ ] bit-rate, frequency, channel, parms for .wav 
 
-Advanced/Overkill:
-- [ ] store base settings in $HOME/.config type file, so you dont have to enter language on cmdline every time
-- [ ] advanced feature to carve up large text-file into set of auto-named .mp3
-- [ ] search and replace feature, useful for replacing certain problem characters, such as '-', pico says "hyphen", but that can ruin the flow of a book, so replace '-' with ',' , which pico interprets merely as a pause.
+Advanced/overkill options:
 - [ ] mp3 output 
+- [ ] store base settings in $HOME/.config type file, so you dont have to type language prefs every time
+- [ ] advanced feature to carve up large text-file into set of auto-named .mp3
+- [ ] search and replace feature, useful for replacing certain problem characters, such as '-' (pico says "hyphen") that can ruin the flow of a book, so replace '-' with ',' which pico interprets instead as a pause.
 
 
 a work in progress..
