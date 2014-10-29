@@ -3,9 +3,14 @@ nanotts
 
 Improved SVOX PicoTTS speech synthesizer
 
-```
-Goal: rewrite the pico2wave front-end sample implementation into something vastly more user friendly, and usable, particularly for the automatic parsing of large text-files (50k+ words) into auto-named .wav or .mp3.
-```
+
+Goal 
+----- 
+Rewrite pico2wave front-end into something vastly more user friendly. 
+-----
+Ideally, add features to aid automatic parsing of large text-files (50k+ words) into automatically named .wav or .mp3, to aid in the structured digestion of papers/articles/books
+-----
+
 
 Steps: 
 - [x] get a bare-bones working implementation of picotts, sans cruft
