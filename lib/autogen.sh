@@ -22,7 +22,7 @@ if [ "$1" = "clean" ]; then
     exit
 fi
 
-IPATHS="-I lib"
+IPATHS="-I ."
 
 libtoolize --force
 aclocal $IPATHS

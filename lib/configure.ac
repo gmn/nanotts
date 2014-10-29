@@ -15,5 +15,4 @@ AC_OUTPUT
 
 AC_CONFIG_MACRO_DIR([m4])
 
-AC_CHECK_LIB(popt, poptGetContext)
 
