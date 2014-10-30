@@ -14,16 +14,16 @@ Ideally, add features to aid automatic parsing of large text-files (50k+ words) 
 
 Steps: 
 - [x] get a bare-bones working implementation of picotts, sans cruft
-- [ ] create a cmdline interface file that exemplifies canonical Unix-isms, like reading from stdin, writing to stdout, versatile command parsing
+- [ ] create cmdline file: 
+    - [ ] reads WORDS from stdin, plays WAVE on device pcm (default)
+    - [ ] reads WORDS from cmdline (-w <words>), writes WAVE to file (-o [optional-name])
+    - [ ] reads WORDS from file (-f <filename>), writes WAVE to stdout (-c)
 - [ ] implement cmdline switches that do:
-    - [ ] select voice
-    - [ ] set voice file directory path
-    - [ ] set .wav name '-o file.wav' 
-    - [ ] read from text file input
-    - [ ] system playback instead of writing WAV output
-    - [ ] on both Mac, Linux, multiple Linux sound systems
-    - [ ] write PCM/WAV to stdout
-    - [ ] print detailed help
+    - [ ] select voice (-v <voice>)
+    - [ ] set voice file directory path (-p <path>)
+    - [ ] works on both Mac and Linux
+    - [ ] print detailed help (-h, --help)
+- [ ] extra:
     - [ ] slow-down/speed-up speaking rate of voice
     - [ ] bit-rate, frequency, channel, parms for .wav 
 
