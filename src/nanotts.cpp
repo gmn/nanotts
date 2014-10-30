@@ -14,7 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  *
- *   Improved pico2wave.
+ *   Nanotts == improved pico2wave.
  *   Convert text to .wav using svox text-to-speech system.
  *
  */
