@@ -154,9 +154,10 @@ int main(int argc, char **argv)
     read = fread( buffer, 1, buf_size, fp );
     struct wavinfo_t info;
     GetWavInfo( buffer, read, &info );
-    PrintWavinfo( &info );
-    fseek( fp, 0L, SEEK_SET );
     fseek( fp, info.dataofs, SEEK_SET );
+
+    PrintWavinfo( &info );
+
 
     // play loop
     while ( (read=fread(buffer, sizeof(char), buf_size, fp)) > 0 ) {

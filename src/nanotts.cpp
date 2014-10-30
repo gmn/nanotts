@@ -244,19 +244,27 @@ Pico
 */
 class Pico {
 private:
+    pico_System     picoSystem;
+    pico_Resource   picoTaResource;
+    pico_Resource   picoSgResource;
+    pico_Resource   picoUtppResource;
+    pico_Engine     picoEngine;
 
 public:
-    Pico() {
-    }
+    Pico() ;
 
     int setup() ;
     void cleanup() ;
-
     void run() ;
 };
 
 
 Pico::Pico() {
+    picoSystem          = 0;
+    picoTaResource      = 0;
+    picoSgResource      = 0;
+    picoUtppResource    = 0;
+    picoEngine          = 0;
 }
 
 void Pico::setup() 
@@ -274,27 +282,18 @@ void Pico::setup()
 
     /* adapation layer global variables */
     void *          picoMemArea         = 0;
-    pico_System     picoSystem          = 0;
-    pico_Resource   picoTaResource      = 0;
-    pico_Resource   picoSgResource      = 0;
-    pico_Resource   picoUtppResource    = 0;
-    pico_Engine     picoEngine          = 0;
+
     pico_Char *     picoTaFileName      = 0;
     pico_Char *     picoSgFileName      = 0;
     pico_Char *     picoUtppFileName    = 0;
     pico_Char *     picoTaResourceName  = 0;
     pico_Char *     picoSgResourceName  = 0;
     pico_Char *     picoUtppResourceName = 0;
-    int             picoSynthAbort      = 0;
-
+    const int       PICO_MEM_SIZE = 8000;
     int             ret, getstatus;
-    pico_Char *     inp = NULL;
-    pico_Char *     local_text = NULL;
-    short           outbuf[MAX_OUTBUF_SIZE/2];
-    pico_Int16      bytes_sent, bytes_recv, text_remaining, out_data_type;
     pico_Retstring  outMessage;
 
-    const int       PICO_MEM_SIZE = 8000;
+
 
     //
     picoMemArea = malloc( PICO_MEM_SIZE );
@@ -440,9 +439,17 @@ void Pico::cleanup() {
     }
 }
 
-void Pico::run( words, unsigned int byte_len, void * buffer ) 
+void Pico::run( const char * words, unsigned int byte_len, void * buffer ) 
 {
-    local_text = (pico_Char *) text ;
+    pico_Char *     local_text = NULL;
+    pico_Int16      bytes_sent, bytes_recv, text_remaining, out_data_type;
+    pico_Char *     inp = NULL;
+    short           outbuf[MAX_OUTBUF_SIZE/2];
+    pico_Retstring  outMessage;
+    int             picoSynthAbort      = 0;
+
+
+    local_text = (pico_Char *) words ;
     text_remaining = strlen((const char *) local_text) + 1;
 
     inp = (pico_Char *) local_text;
@@ -458,17 +465,17 @@ void Pico::run( words, unsigned int byte_len, void * buffer )
         (picoos_char *) wavefile, SAMPLE_FREQ_16KHZ, PICOOS_ENC_LIN)))
     {   
         fprintf(stderr, "Cannot open output wave file\n");
-        ret = 1;
-        goto disposeEngine;
+        return -1;
     }
 
     /* synthesis loop   */
-    while (text_remaining) {
+    while (text_remaining) 
+    {
         /* Feed the text into the engine.   */
         if((ret = pico_putTextUtf8( picoEngine, inp, text_remaining, &bytes_sent ))) {
             pico_getSystemStatusMessage(picoSystem, ret, outMessage);
             fprintf(stderr, "Cannot put Text (%i): %s\n", ret, outMessage);
-            goto disposeEngine;
+            return -2;
         }
 
         text_remaining -= bytes_sent;
@@ -476,16 +483,19 @@ void Pico::run( words, unsigned int byte_len, void * buffer )
 
         do {
             if (picoSynthAbort) {
-                goto disposeEngine;
+                return -3;
             }
+
             /* Retrieve the samples and add them to the buffer. */
             getstatus = pico_getData( picoEngine, (void *) outbuf,
                       MAX_OUTBUF_SIZE, &bytes_recv, &out_data_type );
+
             if((getstatus !=PICO_STEP_BUSY) && (getstatus !=PICO_STEP_IDLE)){
                 pico_getSystemStatusMessage(picoSystem, getstatus, outMessage);
                 fprintf(stderr, "Cannot get Data (%i): %s\n", getstatus, outMessage);
-                goto disposeEngine;
+                return -4;
             }
+
             if (bytes_recv) {
                 if ((bufused + bytes_recv) <= bufferSize) {
                     memcpy(buffer+bufused, (int8_t *) outbuf, bytes_recv);
@@ -500,7 +510,10 @@ void Pico::run( words, unsigned int byte_len, void * buffer )
                     bufused += bytes_recv;
                 }
             }
+
         } while (PICO_STEP_BUSY == getstatus);
+
+
         /* This chunk of synthesis is finished; pass the remaining samples. */
         if (!picoSynthAbort) {
                     done = picoos_sdfPutSamples(
@@ -510,6 +523,8 @@ void Pico::run( words, unsigned int byte_len, void * buffer )
         }
         picoSynthAbort = 0;
     }
+
+    return 0;
 }
 
 
