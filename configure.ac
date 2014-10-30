@@ -2,7 +2,7 @@ dnl Process this file with autoconf to produce a configure script.
 
 AC_PREREQ(2.59)
 
-AC_INIT([svox], [0.1], [greg@naughton.org])
+AC_INIT([nanotts], [0.1], [greg@naughton.org])
 
 AM_INIT_AUTOMAKE([1.9 foreign])
 

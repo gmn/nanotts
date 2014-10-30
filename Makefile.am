@@ -4,8 +4,8 @@ ACLOCAL_AMFLAGS = -I m4
 
 bin_PROGRAMS = nanotts
 nanotts_SOURCES = \
-	bin/nanotts.cpp
+	src/nanotts.cpp
 nanotts_LDADD = \
 	libttspico.la -lm 
-nanotts_CFLAGS = -Wall -I lib
+nanotts_CFLAGS = -Wall -I svoxpico
 

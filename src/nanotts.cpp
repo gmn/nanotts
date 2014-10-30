@@ -24,9 +24,12 @@
 #include <stdio.h>
 #include <string.h>
 
-#include "lib/picoapi.h"
-#include "lib/picoapid.h"
-#include "lib/picoos.h"
+
+extern "C" {
+#include "svoxpico/picoapi.h"
+#include "svoxpico/picoapid.h"
+#include "svoxpico/picoos.h"
+}
 
 
 /* adaptation layer defines */
