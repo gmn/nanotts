@@ -166,17 +166,17 @@ picotrns_SimpleTransducer picotrns_newSimpleTransducer(picoos_MemoryManager mm,
                                               picoos_Common common,
                                               picoos_uint16 maxAltDescLen);
 
-pico_status_t picotrns_disposeSimpleTransducer(picotrns_SimpleTransducer * this,
+pico_status_t picotrns_disposeSimpleTransducer(picotrns_SimpleTransducer * that,
         picoos_MemoryManager mm);
 
 pico_status_t  picotrns_stInitialize(picotrns_SimpleTransducer transducer);
 
-pico_status_t picotrns_stAddWithPlane(picotrns_SimpleTransducer this, picoos_char * inStr, picoos_uint8 plane);
+pico_status_t picotrns_stAddWithPlane(picotrns_SimpleTransducer that, picoos_char * inStr, picoos_uint8 plane);
 
-pico_status_t picotrns_stTransduce(picotrns_SimpleTransducer this, picokfst_FST fst);
+pico_status_t picotrns_stTransduce(picotrns_SimpleTransducer that, picokfst_FST fst);
 
 pico_status_t picotrns_stGetSymSequence(
-        picotrns_SimpleTransducer this,
+        picotrns_SimpleTransducer that,
         picoos_uint8 * outputSymIds,
         picoos_uint32 maxOutputSymIds);
 
