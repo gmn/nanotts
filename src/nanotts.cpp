@@ -1,3 +1,24 @@
+/* nanotts.cpp
+ *
+ * Copyright (C) 2014 Greg Naughton <greg@naughton.org>
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ *    Convert text to .wav using svox text-to-speech system.
+ *    Rewrite of pico2wave.c
+ *
+ */
+
 
 #include <stdlib.h>
 #include <stdio.h>
@@ -16,6 +37,8 @@ extern "C" {
 /*
 ================================================
 Nano
+
+Singleton class to handle workings of this program
 ================================================
 */
 class Nano 
@@ -64,7 +87,11 @@ public:
     void setup_input_output() ;
 
     int getInput( char ** data, int * bytes );
-    void sendOutput( char * data, unsigned int size );
+    void sendOutput( char * data, int size );
+
+    void pcmSetup();
+    void pcmPlay( char * , unsigned int );
+    void pcmShutdown();
 };
 
 Nano::Nano( const int i, const char ** v ) : my_argc(i), my_argv(v) {
@@ -75,6 +102,7 @@ Nano::Nano( const int i, const char ** v ) : my_argc(i), my_argv(v) {
     words = 0;
     in_fp = 0;
     out_fp = 0;
+    pcm_device = 0;
 }
 
 Nano::~Nano() {
@@ -86,6 +114,10 @@ Nano::~Nano() {
         delete[] in_filename;
     if ( words )
         delete[] words;
+
+    if ( pcm_device ) {
+        pcmShutdown();
+    }
 }
 
 void Nano::PrintUsage() {
@@ -219,6 +251,8 @@ int Nano::setup_input_output() {
 
     switch ( out_mode ) {
     case OUT_PLAYBACK:
+        if ( 0 != pcmSetup() )
+            return -1;
         break;
     case OUT_STDOUT:
         break;
@@ -244,9 +278,11 @@ int Nano::getInput( char ** data, int * bytes )
 
 // 
 void Nano::sendOutput( char * data, unsigned int size ) {
+    unsigned int usize = (unsigned) size;
+    pcmPlay( data, usize );
 }
 
-void Nano::pcmSetup() {
+int Nano::pcmSetup() {
     /* -- Initialize -- */
     ao_initialize();
 
@@ -264,28 +300,27 @@ void Nano::pcmSetup() {
     pcm_device = ao_open_live(pcm_driver, &pcm_format, 0 /* no options */);
     if (pcm_device == 0) {
         fprintf(stderr, "Error opening device.\n");
-        return 1;
+        return -1;
     }
-
+    return 0;
 }
 
-void Nano::pcmPlay( ) {
-    // play loop
-    while ( (read=fread(buffer, sizeof(char), buf_size, fp)) > 0 ) {
-        ao_play(pcm_device, buffer, read);
-    }
+void Nano::pcmPlay( char * buffer, unsigned int bytes ) {
+    ao_play( pcm_device, buffer, bytes );
 }
 
 void Nano::pcmShutdown() {
-   // AO Close and shutdown 
     ao_close(pcm_device);
     ao_shutdown();
+    pcm_device = 0;
 }
 
 
 /*
 ================================================
 Pico
+
+class to encapsulate the workings of the SVox PicoTTS System
 ================================================
 */
 class Pico {
@@ -297,6 +332,8 @@ private:
     pico_Engine     picoEngine;
     picoos_SDFile   sdOutFile;
 
+    pico_Char *     local_text;
+    pico_Int16      text_remaining;
 
 public:
     Pico() ;
@@ -304,7 +341,8 @@ public:
 
     int setup() ;
     void cleanup() ;
-    void process_text() ;
+    void input_text() ;
+    unsigned int process_text() ;
 };
 
 
@@ -333,9 +371,8 @@ int Pico::setup()
     const char * picoInternalUtppLingware[]     = { "en-US_utpp.bin",   "en-GB_utpp.bin",   "de-DE_utpp.bin",   "es-ES_utpp.bin",   "fr-FR_utpp.bin",   "it-IT_utpp.bin" };
     const int picoNumSupportedVocs              = 6;
 
-    /* adapation layer global variables */
+    /* adaptation layer variables */
     void *          picoMemArea         = 0;
-
     pico_Char *     picoTaFileName      = 0;
     pico_Char *     picoSgFileName      = 0;
     pico_Char *     picoUtppFileName    = 0;
@@ -348,7 +385,7 @@ int Pico::setup()
 
 
 
-    //
+    // FIXME: does pico free?
     picoMemArea = malloc( PICO_MEM_SIZE );
 
     if ( (ret = pico_initialize( picoMemArea, PICO_MEM_SIZE, &picoSystem )) ) {
@@ -361,6 +398,7 @@ int Pico::setup()
     picoTaFileName      = (pico_Char *) malloc( PICO_MAX_DATAPATH_NAME_SIZE + PICO_MAX_FILE_NAME_SIZE );
     strcpy((char *) picoTaFileName,   PICO_LINGWARE_PATH);
     strcat((char *) picoTaFileName,   (const char *) picoInternalTaLingware[langIndex]);
+
     if((ret = pico_loadResource( picoSystem, picoTaFileName, &picoTaResource ))) {
         pico_getSystemStatusMessage(picoSystem, ret, outMessage);
         fprintf(stderr, "Cannot load text analysis resource file (%i): %s\n", ret, outMessage);
@@ -499,24 +537,25 @@ void Pico::cleanup()
     }
 }
 
-void Pico::process_text( const char * words, int word_len, char * pcm_buffer, int buf_len ) 
+void Pico::input_text( const char * words, int word_len )
+{
+    local_text      = (pico_Char *) words;
+    text_remaining  = word_len;
+}
+
+int Pico::process_text( char * pcm_buffer, int buf_len ) 
 {
     const int       MAX_OUTBUF_SIZE     = 128;
     const int       bufferSize          = 256;
-    pico_Char *     local_text          = 0;
     pico_Char *     inp                 = 0;
     int             picoSynthAbort      = 0;
-    pico_Int16      bytes_sent, bytes_recv, text_remaining, out_data_type;
+    pico_Int16      bytes_sent, bytes_recv, out_data_type;
     short           outbuf[MAX_OUTBUF_SIZE/2];
     pico_Retstring  outMessage;
 
 
-    local_text = (pico_Char *) words ;
-    text_remaining = word_len;
     inp = (pico_Char *) local_text;
-
-    size_t bufused = 0;
-
+    unsigned int bufused = 0;
 
 
 /*
@@ -562,6 +601,11 @@ void Pico::process_text( const char * words, int word_len, char * pcm_buffer, in
                 bufused += bytes_recv;
             }
 
+            if ( bufused >= buf_len ) 
+            {
+                return bufused;
+            }
+
 #if 0
             /* ...and add them to the buffer. */
             if (bytes_recv) {
@@ -597,7 +641,7 @@ void Pico::process_text( const char * words, int word_len, char * pcm_buffer, in
         picoSynthAbort = 0;
     }
 
-    return 0;
+    return bufused;
 }
 
 
@@ -627,19 +671,29 @@ int main( int argc, const char ** argv )
     char * words = 0;
     int length = 0;
     char pcm_buffer[ 8000 ];
+    int bytes = 0;
 
     do {
         nano->getInput( &words, &length );
         if ( 0 == length )
             break;
 
-        pico->process_text( words, length, pcm_buffer, 8000 );
+        pico->input_text( words, length ); 
 
-        nano->sendOutput( pcm_buffer );
+        do {
+            bytes = pico->process_text( pcm_buffer, 8000 );
+            if ( 0 == bytes )
+                break;
+            if ( bytes < 0 ) 
+                goto speedy_exit;
+
+            nano->sendOutput( pcm_buffer, bytes );
+        }
+        while(1)
     }
     while(1);
 
-    //
+speedy_exit:
     delete pico;
     delete nano;
 }
