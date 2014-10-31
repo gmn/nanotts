@@ -50,6 +50,11 @@ private:
 
     char *          copy_arg( int );
     
+    ao_device *         pcm_device;
+    ao_sample_format    pcm_format;
+    int                 pcm_driver;
+
+    char            read_buffer[8000];
 
 public:
     Nano( const int, const char ** );
@@ -58,7 +63,7 @@ public:
     void check_args();
     void setup_input_output() ;
 
-    int getInput( char ** data, unsigned int * bytes );
+    int getInput( char ** data, int * bytes );
     void sendOutput( char * data, unsigned int size );
 };
 
@@ -228,13 +233,54 @@ int Nano::setup_input_output() {
 
 // puts input into *data, and number_bytes into bytes
 // returns 0 on no more data
-int Nano::getInput( char ** data, unsigned int * bytes ) {
+int Nano::getInput( char ** data, int * bytes ) 
+{
+    int total = 0;
+    fread( read_buffer, 1, 8000, in_fp );
+    *data = read_buffer;
+    *bytes = total;
+    return total;
 }
 
 // 
 void Nano::sendOutput( char * data, unsigned int size ) {
 }
 
+void Nano::pcmSetup() {
+    /* -- Initialize -- */
+    ao_initialize();
+
+    /* -- Setup for default driver -- */
+    pcm_driver = ao_default_driver_id();
+
+    // set the PCM format from wav header
+    memset(&pcm_format, 0, sizeof(pcm_format));
+    pcm_format.bits         = 16;
+    pcm_format.channels     = 1;
+    pcm_format.rate         = 16000;
+    pcm_format.byte_format  = AO_FMT_LITTLE;
+
+    /* -- Open driver -- */
+    pcm_device = ao_open_live(pcm_driver, &pcm_format, 0 /* no options */);
+    if (pcm_device == 0) {
+        fprintf(stderr, "Error opening device.\n");
+        return 1;
+    }
+
+}
+
+void Nano::pcmPlay( ) {
+    // play loop
+    while ( (read=fread(buffer, sizeof(char), buf_size, fp)) > 0 ) {
+        ao_play(pcm_device, buffer, read);
+    }
+}
+
+void Nano::pcmShutdown() {
+   // AO Close and shutdown 
+    ao_close(pcm_device);
+    ao_shutdown();
+}
 
 
 /*
@@ -249,13 +295,16 @@ private:
     pico_Resource   picoSgResource;
     pico_Resource   picoUtppResource;
     pico_Engine     picoEngine;
+    picoos_SDFile   sdOutFile;
+
 
 public:
     Pico() ;
+    ~Pico() ;
 
     int setup() ;
     void cleanup() ;
-    void run() ;
+    void process_text() ;
 };
 
 
@@ -265,9 +314,13 @@ Pico::Pico() {
     picoSgResource      = 0;
     picoUtppResource    = 0;
     picoEngine          = 0;
+    sdOutFile           = 0;
+}
+Pico::~Pico() {
+    cleanup();
 }
 
-void Pico::setup() 
+int Pico::setup() 
 {
     /* supported voices
        Pico does not seperately specify the voice and locale.   */
@@ -375,42 +428,49 @@ void Pico::setup()
     // partial shutdowns below this line
     //  for pico cleanup in case of startup abort
     //
-    picoos_sdfCloseOut(common, &sdOutFile);
-
 disposeEngine:
+    if ( sdOutFile ) {
+        picoos_Common common = (picoos_Common) pico_sysGetCommon(picoSystem);
+        picoos_sdfCloseOut(common, &sdOutFile);
+        sdOutFile = 0;
+    }
+
     if (picoEngine) {
         pico_disposeEngine( picoSystem, &picoEngine );
         pico_releaseVoiceDefinition( picoSystem, (pico_Char *) PICO_VOICE_NAME );
-        picoEngine = NULL;
+        picoEngine = 0;
     }
 unloadUtppResource:
     if (picoUtppResource) {
         pico_unloadResource( picoSystem, &picoUtppResource );
-        picoUtppResource = NULL;
+        picoUtppResource = 0;
     }
 unloadSgResource:
     if (picoSgResource) {
         pico_unloadResource( picoSystem, &picoSgResource );
-        picoSgResource = NULL;
+        picoSgResource = 0;
     }
 unloadTaResource:
     if (picoTaResource) {  
         pico_unloadResource( picoSystem, &picoTaResource );
-        picoTaResource = NULL;
+        picoTaResource = 0;
     }
 terminate:
     if (picoSystem) {
         pico_terminate(&picoSystem);
-        picoSystem = NULL;
+        picoSystem = 0;
     }
 
     return -1;
 }
 
-void Pico::cleanup() {
-
-    // close output wave file
-    picoos_sdfCloseOut(common, &sdOutFile);
+void Pico::cleanup() 
+{
+    if ( sdOutFile ) {
+        // close output wave file
+        picoos_sdfCloseOut(common, &sdOutFile);
+        sdOutFile = 0;
+    }
 
     if (picoEngine) {
         pico_disposeEngine( picoSystem, &picoEngine );
@@ -439,27 +499,27 @@ void Pico::cleanup() {
     }
 }
 
-void Pico::run( const char * words, unsigned int byte_len, void * buffer ) 
+void Pico::process_text( const char * words, int word_len, char * pcm_buffer, int buf_len ) 
 {
-    pico_Char *     local_text = NULL;
+    const int       MAX_OUTBUF_SIZE     = 128;
+    const int       bufferSize          = 256;
+    pico_Char *     local_text          = 0;
+    pico_Char *     inp                 = 0;
+    int             picoSynthAbort      = 0;
     pico_Int16      bytes_sent, bytes_recv, text_remaining, out_data_type;
-    pico_Char *     inp = NULL;
     short           outbuf[MAX_OUTBUF_SIZE/2];
     pico_Retstring  outMessage;
-    int             picoSynthAbort      = 0;
 
 
     local_text = (pico_Char *) words ;
-    text_remaining = strlen((const char *) local_text) + 1;
-
+    text_remaining = word_len;
     inp = (pico_Char *) local_text;
 
     size_t bufused = 0;
 
-    picoos_Common common = (picoos_Common) pico_sysGetCommon(picoSystem);
 
-    picoos_SDFile sdOutFile = NULL;
 
+/*
     picoos_bool done = TRUE;
     if(TRUE != (done = picoos_sdfOpenOut(common, &sdOutFile,
         (picoos_char *) wavefile, SAMPLE_FREQ_16KHZ, PICOOS_ENC_LIN)))
@@ -467,6 +527,8 @@ void Pico::run( const char * words, unsigned int byte_len, void * buffer )
         fprintf(stderr, "Cannot open output wave file\n");
         return -1;
     }
+*/
+
 
     /* synthesis loop   */
     while (text_remaining) 
@@ -486,40 +548,51 @@ void Pico::run( const char * words, unsigned int byte_len, void * buffer )
                 return -3;
             }
 
-            /* Retrieve the samples and add them to the buffer. */
-            getstatus = pico_getData( picoEngine, (void *) outbuf,
-                      MAX_OUTBUF_SIZE, &bytes_recv, &out_data_type );
-
-            if((getstatus !=PICO_STEP_BUSY) && (getstatus !=PICO_STEP_IDLE)){
+            /* Retrieve the samples */ 
+            getstatus = pico_getData( picoEngine, (void *) outbuf, MAX_OUTBUF_SIZE, &bytes_recv, &out_data_type );
+            if ( (getstatus !=PICO_STEP_BUSY) && (getstatus !=PICO_STEP_IDLE) ) {
                 pico_getSystemStatusMessage(picoSystem, getstatus, outMessage);
                 fprintf(stderr, "Cannot get Data (%i): %s\n", getstatus, outMessage);
                 return -4;
             }
 
+            if ( bytes_recv > 0 ) 
+            {
+                memcpy( pcm_buffer+bufused, (int8_t *)outbuf, bytes_recv );
+                bufused += bytes_recv;
+            }
+
+#if 0
+            /* ...and add them to the buffer. */
             if (bytes_recv) {
                 if ((bufused + bytes_recv) <= bufferSize) {
-                    memcpy(buffer+bufused, (int8_t *) outbuf, bytes_recv);
+                    memcpy( pcm_buffer+bufused, (int8_t *)outbuf, bytes_recv );
                     bufused += bytes_recv;
                 } else {
+/*
                     done = picoos_sdfPutSamples(
                                         sdOutFile,
                                         bufused / 2,
                                         (picoos_int16*) (buffer));
+*/
                     bufused = 0;
-                    memcpy(buffer, (int8_t *) outbuf, bytes_recv);
+                    memcpy( pcm_buffer, (int8_t *)outbuf, bytes_recv );
                     bufused += bytes_recv;
                 }
             }
+#endif
 
         } while (PICO_STEP_BUSY == getstatus);
 
 
         /* This chunk of synthesis is finished; pass the remaining samples. */
         if (!picoSynthAbort) {
+/*
                     done = picoos_sdfPutSamples(
                                         sdOutFile,
                                         bufused / 2,
                                         (picoos_int16*) (buffer));
+*/
         }
         picoSynthAbort = 0;
     }
@@ -551,23 +624,22 @@ int main( int argc, const char ** argv )
     Pico *pico = new Pico();
     pico->setup();
 
-    while(1)
-    {
-        char * words = 0;
-        int length = 0;
-        char pcm_buffer[ 8000 ];
+    char * words = 0;
+    int length = 0;
+    char pcm_buffer[ 8000 ];
 
+    do {
         nano->getInput( &words, &length );
         if ( 0 == length )
             break;
 
-        pico->run( words, length, pcm_buffer );
+        pico->process_text( words, length, pcm_buffer, 8000 );
 
         nano->sendOutput( pcm_buffer );
     }
+    while(1);
 
     //
-    pico->cleanup();
     delete pico;
     delete nano;
 }

@@ -126,11 +126,26 @@ int main(int argc, char **argv)
 	/* -- Setup for default driver -- */
 	default_driver = ao_default_driver_id();
 
+    char buf[300];
+
+    if ( (fp=fopen(filename, "r")) == 0 ) {
+		fprintf(stderr, "Error opening file: %s.\n", filename);
+		return 1;
+    }
+
+    // parse header and print WAV/PCM format 
+    read = fread( buf, 1, 300, fp );
+    struct wavinfo_t info;
+    GetWavInfo( buf, read, &info );
+    fseek( fp, info.dataofs, SEEK_SET );
+    PrintWavinfo( &info );
+
+    // set the PCM format from wav header
     memset(&format, 0, sizeof(format));
-	format.bits = 16;
-	format.channels = 1;
-	format.rate = 16000;
-	format.byte_format = AO_FMT_LITTLE;
+	format.bits         = info.width * 8;
+	format.channels     = info.channels;
+	format.rate         = info.rate;
+	format.byte_format  = AO_FMT_LITTLE;
 
 	/* -- Open driver -- */
 	device = ao_open_live(default_driver, &format, 0 /* no options */);
@@ -139,24 +154,11 @@ int main(int argc, char **argv)
 		return 1;
 	}
 
-    if ( (fp=fopen(filename, "r")) == 0 ) {
-		fprintf(stderr, "Error opening file: %s.\n", filename);
-		return 1;
-    }
-
 
 	// create read buffer
     sample_size_bytes = format.bits/8 * format.channels;
 	buf_size = sample_size_bytes * format.rate;
 	buffer = calloc(buf_size, sizeof(char));
-
-    // parse header and print WAV/PCM format 
-    read = fread( buffer, 1, buf_size, fp );
-    struct wavinfo_t info;
-    GetWavInfo( buffer, read, &info );
-    fseek( fp, info.dataofs, SEEK_SET );
-
-    PrintWavinfo( &info );
 
 
     // play loop
