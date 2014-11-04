@@ -31,7 +31,7 @@ extern "C" {
 #include "svoxpico/picoos.h"
 }
 
-
+#include "PicoVoices.h"
 
 
 /*
@@ -46,7 +46,7 @@ class Nano
 private:
     enum inputMode_t {
         IN_STDIN,
-        IN_ARG,
+        IN_CMDLINE_ARG,
         IN_FILE
     };
 
@@ -92,6 +92,9 @@ public:
     void pcmSetup();
     void pcmPlay( char * , unsigned int );
     void pcmShutdown();
+
+    const char * getVoice();
+    const char * getPath();
 };
 
 Nano::Nano( const int i, const char ** v ) : my_argc(i), my_argv(v) {
@@ -174,7 +177,7 @@ int Nano::check_args() {
 
     // DEFAULTS
     in_mode = IN_STDIN;
-    out_mode = OUT_PLAYBACK;
+    out_mode = OUT_FILE;
 
 
     for ( int i = 0; i < my_argc; i++ )
@@ -186,7 +189,7 @@ int Nano::check_args() {
 
         // INPUTS
         else if ( strcmp( my_argv[i], "-w" ) == 0 ) {
-            in_mode = IN_ARG;
+            in_mode = IN_CMDLINE_ARG;
             if ( (words = copy_arg( i + 1 )) == 0 )
                 return -1;
         } 
@@ -238,7 +241,7 @@ int Nano::setup_input_output() {
         }
 
         break;
-    case IN_ARG:
+    case IN_CMDLINE_ARG:
         // words
         break;
     case IN_FILE:
@@ -315,6 +318,13 @@ void Nano::pcmShutdown() {
     pcm_device = 0;
 }
 
+const char * Nano::getVoice() {
+    return voice;
+}
+
+const char * Nano::getPath() {
+    return voicedir;
+}
 
 /*
 ================================================
@@ -325,6 +335,8 @@ class to encapsulate the workings of the SVox PicoTTS System
 */
 class Pico {
 private:
+    PicoVoices_t    voices;
+
     pico_System     picoSystem;
     pico_Resource   picoTaResource;
     pico_Resource   picoSgResource;
@@ -334,15 +346,19 @@ private:
 
     pico_Char *     local_text;
     pico_Int16      text_remaining;
+    char *          picoLingwarePath;
 
 public:
     Pico() ;
     ~Pico() ;
 
+    void setPath( const char * path =0 );
     int setup() ;
     void cleanup() ;
-    void input_text() ;
-    unsigned int process_text() ;
+    void sendTextForProcessing() ;
+    unsigned int processText() ;
+
+    void setVoice( const char * );
 };
 
 
@@ -353,39 +369,39 @@ Pico::Pico() {
     picoUtppResource    = 0;
     picoEngine          = 0;
     sdOutFile           = 0;
+    picoLingwarePath    = 0;
 }
+
 Pico::~Pico() {
     cleanup();
 }
 
+void Pico::setPath( const char * path ) {
+    if ( !path )
+        path = "./lang/";
+    unsigned int len = strlen( path ) + 1;
+    picoLingwarePath = new char[ len ];
+    strcpy( picoLingwarePath, path );
+}
+
 int Pico::setup() 
 {
-    /* supported voices
-       Pico does not seperately specify the voice and locale.   */
-    const char * picoSupportedLangIso3[]        = { "eng",              "eng",              "deu",              "spa",              "fra",              "ita" };
-    const char * picoSupportedCountryIso3[]     = { "USA",              "GBR",              "DEU",              "ESP",              "FRA",              "ITA" };
-    const char * picoSupportedLang[]            = { "en-US",            "en-GB",            "de-DE",            "es-ES",            "fr-FR",            "it-IT" };
-    const char * picoInternalLang[]             = { "en-US",            "en-GB",            "de-DE",            "es-ES",            "fr-FR",            "it-IT" };
-    const char * picoInternalTaLingware[]       = { "en-US_ta.bin",     "en-GB_ta.bin",     "de-DE_ta.bin",     "es-ES_ta.bin",     "fr-FR_ta.bin",     "it-IT_ta.bin" };
-    const char * picoInternalSgLingware[]       = { "en-US_lh0_sg.bin", "en-GB_kh0_sg.bin", "de-DE_gl0_sg.bin", "es-ES_zl0_sg.bin", "fr-FR_nk0_sg.bin", "it-IT_cm0_sg.bin" };
-    const char * picoInternalUtppLingware[]     = { "en-US_utpp.bin",   "en-GB_utpp.bin",   "de-DE_utpp.bin",   "es-ES_utpp.bin",   "fr-FR_utpp.bin",   "it-IT_utpp.bin" };
-    const int picoNumSupportedVocs              = 6;
-
     /* adaptation layer variables */
-    void *          picoMemArea         = 0;
-    pico_Char *     picoTaFileName      = 0;
-    pico_Char *     picoSgFileName      = 0;
-    pico_Char *     picoUtppFileName    = 0;
-    pico_Char *     picoTaResourceName  = 0;
-    pico_Char *     picoSgResourceName  = 0;
-    pico_Char *     picoUtppResourceName = 0;
-    const int       PICO_MEM_SIZE = 8000;
+    void *          picoMemArea             = 0;
+    pico_Char *     picoTaFileName          = 0;
+    pico_Char *     picoSgFileName          = 0;
+    pico_Char *     picoUtppFileName        = 0;
+    pico_Char *     picoTaResourceName      = 0;
+    pico_Char *     picoSgResourceName      = 0;
+    pico_Char *     picoUtppResourceName    = 0;
+    const int       PICO_MEM_SIZE           = 8000;
+    const char *    PICO_VOICE_NAME         = "PicoVoice";
     int             ret, getstatus;
     pico_Retstring  outMessage;
 
 
 
-    // FIXME: does pico free?
+    // FIXME: does pico free memArea?  Will need to profile: valgrind or gprof
     picoMemArea = malloc( PICO_MEM_SIZE );
 
     if ( (ret = pico_initialize( picoMemArea, PICO_MEM_SIZE, &picoSystem )) ) {
@@ -395,27 +411,44 @@ int Pico::setup()
     }
 
     /* Load the text analysis Lingware resource file.   */
-    picoTaFileName      = (pico_Char *) malloc( PICO_MAX_DATAPATH_NAME_SIZE + PICO_MAX_FILE_NAME_SIZE );
-    strcpy((char *) picoTaFileName,   PICO_LINGWARE_PATH);
-    strcat((char *) picoTaFileName,   (const char *) picoInternalTaLingware[langIndex]);
+    // FIXME: free this?
+    picoTaFileName = (pico_Char *) malloc( PICO_MAX_DATAPATH_NAME_SIZE + PICO_MAX_FILE_NAME_SIZE );
 
-    if((ret = pico_loadResource( picoSystem, picoTaFileName, &picoTaResource ))) {
+    // path
+    if ( !picoLingwarePath )
+        setPath();
+    strcpy((char *) picoTaFileName, picoLingwarePath);
+    
+    // check for connecting slash
+    unsigned int len = strlen( picoTaFileName );
+    if ( picoTaFileName[len-1] != '/' )
+        strcat((char*) picoTaFileName, "/");
+
+    // langfile name
+    strcat( (char *) picoTaFileName, voices.getTaName() );
+
+    // attempt to load it
+    if ( (ret = pico_loadResource(picoSystem, picoTaFileName, &picoTaResource)) ) {
         pico_getSystemStatusMessage(picoSystem, ret, outMessage);
         fprintf(stderr, "Cannot load text analysis resource file (%i): %s\n", ret, outMessage);
         goto unloadTaResource;
     }
 
     /* Load the signal generation Lingware resource file.   */
+    // FIXME: free?
     picoSgFileName      = (pico_Char *) malloc( PICO_MAX_DATAPATH_NAME_SIZE + PICO_MAX_FILE_NAME_SIZE );
-    strcpy((char *) picoSgFileName,   PICO_LINGWARE_PATH);
-    strcat((char *) picoSgFileName,   (const char *) picoInternalSgLingware[langIndex]);
-    if((ret = pico_loadResource( picoSystem, picoSgFileName, &picoSgResource ))) {
+
+    strcpy((char *) picoSgFileName,   picoLingwarePath );
+    strcat((char *) picoSgFileName,   voices.getSgName() );
+
+    if ( (ret = pico_loadResource(picoSystem, picoSgFileName, &picoSgResource)) ) {
         pico_getSystemStatusMessage(picoSystem, ret, outMessage);
         fprintf(stderr, "Cannot load signal generation Lingware resource file (%i): %s\n", ret, outMessage);
         goto unloadSgResource;
     }
 
     /* Get the text analysis resource name.     */
+    // FIXME: free?
     picoTaResourceName  = (pico_Char *) malloc( PICO_MAX_RESOURCE_NAME_SIZE );
     if((ret = pico_getResourceName( picoSystem, picoTaResource, (char *) picoTaResourceName ))) {
         pico_getSystemStatusMessage(picoSystem, ret, outMessage);
@@ -424,6 +457,7 @@ int Pico::setup()
     }
 
     /* Get the signal generation resource name. */
+    // FIXME: free?
     picoSgResourceName  = (pico_Char *) malloc( PICO_MAX_RESOURCE_NAME_SIZE );
     if((ret = pico_getResourceName( picoSystem, picoSgResource, (char *) picoSgResourceName ))) {
         pico_getSystemStatusMessage(picoSystem, ret, outMessage);
@@ -537,13 +571,13 @@ void Pico::cleanup()
     }
 }
 
-void Pico::input_text( const char * words, int word_len )
+void Pico::sendTextForProcessing( const char * words, int word_len )
 {
     local_text      = (pico_Char *) words;
     text_remaining  = word_len;
 }
 
-int Pico::process_text( char * pcm_buffer, int buf_len ) 
+int Pico::processText( char * pcm_buffer, int buf_len ) 
 {
     const int       MAX_OUTBUF_SIZE     = 128;
     const int       bufferSize          = 256;
@@ -644,6 +678,10 @@ int Pico::process_text( char * pcm_buffer, int buf_len )
     return bufused;
 }
 
+void Pico::setVoice( const char * v ) {
+    voices.setVoice( v );
+}
+
 
 
 
@@ -667,6 +705,9 @@ int main( int argc, const char ** argv )
     //
     Pico *pico = new Pico();
     pico->setup();
+    pico->setVoice( nano->getVoice() );
+    pico->setPath( nano->getPath() );
+
 
     char * words = 0;
     int length = 0;
@@ -678,20 +719,20 @@ int main( int argc, const char ** argv )
         if ( 0 == length )
             break;
 
-        pico->input_text( words, length ); 
+        pico->sendTextForProcessing( words, length ); 
 
         do {
-            bytes = pico->process_text( pcm_buffer, 8000 );
-            if ( 0 == bytes )
-                break;
+            bytes = pico->processText( pcm_buffer, 8000 );
             if ( bytes < 0 ) 
                 goto speedy_exit;
-
-            nano->sendOutput( pcm_buffer, bytes );
+            if ( 0 == bytes )
+                break;
         }
         while(1)
     }
     while(1);
+
+    //nano->sendOutput( pcm_buffer, bytes );
 
 speedy_exit:
     delete pico;
