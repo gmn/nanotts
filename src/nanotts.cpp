@@ -23,7 +23,14 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
+
+#include <sys/types.h>
+#include <sys/stat.h>
 #include <unistd.h>
+#include <sys/mman.h> // mmap
+
+#include <ao/ao.h>
+
 
 extern "C" {
 #include "svoxpico/picoapi.h"
@@ -47,13 +54,15 @@ private:
     enum inputMode_t {
         IN_STDIN,
         IN_CMDLINE_ARG,
-        IN_FILE
+        IN_SINGLE_FILE,
+        IN_MULTIPLE_FILES
     };
 
     enum outputMode_t {
         OUT_PLAYBACK,
         OUT_STDOUT,
-        OUT_FILE
+        OUT_MULTIPLE_FILES,
+        OUT_SINGLE_FILE
     };
 
     inputMode_t     in_mode;
@@ -63,8 +72,9 @@ private:
     const char **   my_argv;
     const char *    exename;
 
-    char            voice[ 6 ];
+    char *          voice;
     char *          voicedir;
+    char *          prefix;
     char *          out_filename;
     char *          in_filename;
     char *          words;
@@ -77,40 +87,54 @@ private:
     ao_sample_format    pcm_format;
     int                 pcm_driver;
 
-    char            read_buffer[8000];
+    unsigned char * input_buffer;
+    unsigned int    input_size;
 
 public:
     Nano( const int, const char ** );
+    ~Nano();
 
     void PrintUsage();
-    void check_args();
-    void setup_input_output() ;
+    int check_args();
+    int setup_input_output() ;
 
-    int getInput( char ** data, int * bytes );
-    void sendOutput( char * data, int size );
+    int getInput( unsigned char ** data, unsigned int * bytes );
+    void sendOutput( char * data, unsigned int size );
 
-    void pcmSetup();
+    int  pcmSetup();
     void pcmPlay( char * , unsigned int );
     void pcmShutdown();
 
     const char * getVoice();
     const char * getPath();
+
+    static unsigned char * memorymap_file_open( const char *, unsigned int *, FILE * );
+    static void memorymap_file_close( void * , unsigned int );
+
+    const char * outFilename() const { return out_filename; }
 };
 
 Nano::Nano( const int i, const char ** v ) : my_argc(i), my_argv(v) {
-    strcpy( voice, "en-GB" );
+    voice = 0;
     voicedir = 0;
+    prefix = 0;
     out_filename = 0;
     in_filename = 0;
     words = 0;
     in_fp = 0;
     out_fp = 0;
     pcm_device = 0;
+    input_buffer = 0;
+    input_size = 0;
 }
 
 Nano::~Nano() {
+    if ( voice )
+        delete[] voice;
     if ( voicedir )
         delete[] voicedir;
+    if ( prefix )
+        delete[] prefix;
     if ( out_filename )
         delete[] out_filename;
     if ( in_filename )
@@ -121,6 +145,21 @@ Nano::~Nano() {
     if ( pcm_device ) {
         pcmShutdown();
     }
+
+    if ( input_buffer ) {
+        memorymap_file_close( input_buffer, input_size );
+        input_buffer = 0;
+    }
+
+    if ( in_fp != 0 && in_fp != stdin ) {
+        fclose( in_fp );
+        in_fp = 0;
+    }
+    if ( out_fp != 0 && out_fp != stdout ) {
+        fclose( out_fp );
+        out_fp = 0;
+    }
+
 }
 
 void Nano::PrintUsage() {
@@ -130,11 +169,14 @@ void Nano::PrintUsage() {
     } helps[] = {
         { "-h, --help", "displays this" },
         { "-v <voice>", "select voice. Default: en-GB" },
-        { "-p <directory>", "Lingware voices directory. Default: \"./lang\"" },
+        { "-l <directory>", "Lingware voices directory. Default: \"./lang\"" },
         { "-w <words>", "words. must be correctly quoted" },
         { "-f <filename>", "filename to read input from" },
-        { "-o [filename]", "write output to file" },
-        { "-c ", "send PCM output to stdout" }
+        { "-p <prefix>", "write output to multiple numbered files with prefix" },
+        { "-o <filename>", "write output to single file; overrides prefix" },
+        { "-play|-m", "play output on PC's soundcard" },
+        { "-c ", "send PCM output to stdout" },
+        { "-files", "set multiple input files" }
     };
 
     const char * program = strrchr( my_argv[0], '/' );
@@ -151,14 +193,15 @@ void Nano::PrintUsage() {
 }
 
 // get argument at index, make a copy and return it
-char * Nano::copy_arg( int index ) {
-    if ( index + 1 >= argc ) 
+char * Nano::copy_arg( int index ) 
+{
+    if ( index >= my_argc ) 
         return 0;
 
-    int len = strlen( my_argv[index+1] );
+    int len = strlen( my_argv[index] );
     char * buf = new char[len+1];
     memset( buf, 0, len + 1 );
-    strcpy( buf, my_argv[index+1] );
+    strcpy( buf, my_argv[index] );
     return buf;
 }
 
@@ -177,7 +220,7 @@ int Nano::check_args() {
 
     // DEFAULTS
     in_mode = IN_STDIN;
-    out_mode = OUT_FILE;
+    out_mode = OUT_SINGLE_FILE;
 
 
     for ( int i = 0; i < my_argc; i++ )
@@ -194,15 +237,26 @@ int Nano::check_args() {
                 return -1;
         } 
         else if ( strcmp( my_argv[i], "-f" ) == 0 ) {
-            in_mode = IN_FILE;
+            in_mode = IN_SINGLE_FILE;
+            if ( (in_filename = copy_arg( i + 1 )) == 0 )
+                return -1;
+        }
+        else if ( strcmp( my_argv[i], "-files" ) == 0 ) {
+            in_mode = IN_MULTIPLE_FILES;
+            // FIXME: get array of char*filename
             if ( (in_filename = copy_arg( i + 1 )) == 0 )
                 return -1;
         }
 
         // OUTPUTS
         else if ( strcmp( my_argv[i], "-o" ) == 0 ) {
-            out_mode = OUT_FILE;
+            out_mode = OUT_SINGLE_FILE;
             if ( (out_filename = copy_arg( i + 1 )) == 0 )
+                return -1;
+        }
+        else if ( strcmp( my_argv[i], "-p" ) == 0 ) {
+            out_mode = OUT_MULTIPLE_FILES;
+            if ( (prefix = copy_arg( i + 1 )) == 0 )
                 return -1;
         }
         else if ( strcmp( my_argv[i], "-c" ) == 0 ) {
@@ -211,57 +265,81 @@ int Nano::check_args() {
 
         // SVOX
         else if ( strcmp( my_argv[i], "-v" ) == 0 ) {
-            if ( i + 1 >= argc )
+            if ( (voice = copy_arg( i + 1 )) == 0 )
                 return -1;
-            strncpy( voice, my_argv[i+1], 5 );
-            voice[5] = 0;
         }
-        else if ( strcmp( my_argv[i], "-p" ) == 0 ) {
+        else if ( strcmp( my_argv[i], "-l" ) == 0 ) {
             if ( (voicedir = copy_arg( i + 1 )) == 0 )
                 return -1;
         }
     }
 
+    // post-DEFAULTS
+    if ( !voice ) {
+        voice = new char[6];
+        strcpy( voice, "en-GB" );
+    }
     if ( !voicedir ) {
         voicedir = new char[8];
         strcpy( voicedir, "./lang/" );
     }
 
+    // FIXME: temporary
+    if ( !out_filename ) {
+        out_filename = new char[20];
+        memset( out_filename, 0, 20 );
+        strcpy( out_filename, "nanotts-001.wav" );
+    }
+    if ( !prefix ) {
+        prefix = new char[20];
+        memset( prefix, 0, 20 );
+        strcpy( prefix, "nanotts-001" );
+    }
+
     return 0;
 }
 
-int Nano::setup_input_output() {
+int Nano::setup_input_output() 
+{
+#define __NOT_IMPL__ do{fprintf(stderr," ** not implemented ** \n");return -1;}while(0);
 
     switch ( in_mode ) {
     case IN_STDIN:
         // detect if stdin is coming from a pipe
-        if ( ! isatty(fileno(stdin)) ) // On windows prefix with underscores: _isatty, _fileno
-        {
+        if ( ! isatty(fileno(stdin)) ) { // On windows prefix with underscores: _isatty, _fileno
             in_fp = stdin;
-        }
-
-        break;
-    case IN_CMDLINE_ARG:
-        // words
-        break;
-    case IN_FILE:
-        if ( (in_fp = fopen( in_filename, "r" )) == 0 )
+        } else {
+            fprintf( stderr, " **error: reading from stdin\n" );
             return -1;
+        }
         break;
+    case IN_SINGLE_FILE:
+        if ( (in_fp = fopen( in_filename, "rb" )) == 0 ) {
+            fprintf( stderr, " **error: opening file: \"%s\"\n", in_filename );
+            return -1;
+        }
+        break;
+
+    case IN_CMDLINE_ARG:
+    case IN_MULTIPLE_FILES:
     default:
+        __NOT_IMPL__
         break;
     };
 
     switch ( out_mode ) {
-    case OUT_PLAYBACK:
-        if ( 0 != pcmSetup() )
-            return -1;
-        break;
-    case OUT_STDOUT:
-        break;
-    case OUT_FILE:
+    case OUT_SINGLE_FILE:
+/* for now, writing output to file is ubiquitous, so perhaps we dont need an out_mode for it
         if ( (out_fp = fopen( out_filename, "w" )) == 0 )
             return -1;
+*/
+        break;
+
+    case OUT_PLAYBACK:
+    case OUT_STDOUT:
+    case OUT_MULTIPLE_FILES:
+    default:
+        __NOT_IMPL__
         break;
     }
 
@@ -270,13 +348,25 @@ int Nano::setup_input_output() {
 
 // puts input into *data, and number_bytes into bytes
 // returns 0 on no more data
-int Nano::getInput( char ** data, int * bytes ) 
+int Nano::getInput( unsigned char ** data, unsigned int * bytes ) 
 {
-    int total = 0;
-    fread( read_buffer, 1, 8000, in_fp );
-    *data = read_buffer;
-    *bytes = total;
-    return total;
+    switch( in_mode ) {
+    case IN_STDIN:
+        input_buffer = memorymap_file_open( 0, &input_size, in_fp );
+        *data = input_buffer;
+        *bytes = input_size;
+        break;
+    case IN_SINGLE_FILE:
+        input_buffer = memorymap_file_open( in_filename, &input_size, in_fp );
+        *data = input_buffer;
+        *bytes = input_size;
+        break;
+    default:
+        fprintf( stderr, "unknown input\n" );
+        return -1;
+    }
+    
+    return 0;
 }
 
 // 
@@ -326,6 +416,40 @@ const char * Nano::getPath() {
     return voicedir;
 }
 
+unsigned char * Nano::memorymap_file_open( const char * _filename, unsigned int *sz, FILE * fp )
+{
+    // no filename. assume its already open
+    if ( _filename ) {
+        char * filename = realpath( _filename, NULL );
+    }
+
+    // fileno
+    int fileno = ::fileno( fp );
+
+    // filesize
+    struct stat st;
+    if ( fstat( fileno, &st ) == -1 || st.st_size == 0 ) {
+        fprintf( stderr, "couldn't stat input file\n" );
+        return 0;
+    }
+    *sz = st.st_size;
+
+    // mmap the file
+    unsigned char * data = (unsigned char *) mmap( 0, st.st_size, PROT_READ, MAP_SHARED, fileno, 0 );
+
+    return data;
+}
+
+void Nano::memorymap_file_close( void *data, unsigned int size )
+{
+    if ( data )
+        if ( -1 == munmap( data, size ) )
+            fprintf( stderr, "failed to unmap file\n" );
+}
+
+//////////////////////////////////////////////////////////////////
+
+
 /*
 ================================================
 Pico
@@ -340,14 +464,15 @@ private:
     pico_System     picoSystem;
     pico_Resource   picoTaResource;
     pico_Resource   picoSgResource;
-    pico_Resource   picoUtppResource;
     pico_Engine     picoEngine;
     picoos_SDFile   sdOutFile;
+    char *          out_filename;
 
     pico_Char *     local_text;
     pico_Int16      text_remaining;
     char *          picoLingwarePath;
 
+    char            picoVoiceName[10];
 public:
     Pico() ;
     ~Pico() ;
@@ -355,10 +480,11 @@ public:
     void setPath( const char * path =0 );
     int setup() ;
     void cleanup() ;
-    void sendTextForProcessing() ;
-    unsigned int processText() ;
+    void sendTextForProcessing( unsigned char *, int ) ;
+    int process() ;
 
     void setVoice( const char * );
+    void setOutFilename( const char * fn ) { out_filename = const_cast<char*>(fn); }
 };
 
 
@@ -366,13 +492,19 @@ Pico::Pico() {
     picoSystem          = 0;
     picoTaResource      = 0;
     picoSgResource      = 0;
-    picoUtppResource    = 0;
     picoEngine          = 0;
     sdOutFile           = 0;
     picoLingwarePath    = 0;
+    out_filename        = 0;
+
+    strcpy( picoVoiceName, "PicoVoice" );
 }
 
 Pico::~Pico() {
+    if ( picoLingwarePath ) {
+        delete[] picoLingwarePath;
+    }
+
     cleanup();
 }
 
@@ -395,19 +527,21 @@ int Pico::setup()
     pico_Char *     picoSgResourceName      = 0;
     pico_Char *     picoUtppResourceName    = 0;
     const int       PICO_MEM_SIZE           = 8000;
-    const char *    PICO_VOICE_NAME         = "PicoVoice";
     int             ret, getstatus;
     pico_Retstring  outMessage;
 
 
 
-    // FIXME: does pico free memArea?  Will need to profile: valgrind or gprof
+    // FIXME: does pico free memArea?  We need to profile: valgrind or gprof
     picoMemArea = malloc( PICO_MEM_SIZE );
 
     if ( (ret = pico_initialize( picoMemArea, PICO_MEM_SIZE, &picoSystem )) ) {
         pico_getSystemStatusMessage(picoSystem, ret, outMessage);
         fprintf(stderr, "Cannot initialize pico (%i): %s\n", ret, outMessage);
-        goto terminate;
+        //goto unloadPicoSystem;
+        pico_terminate(&picoSystem);
+        picoSystem = 0;
+        return -1;
     }
 
     /* Load the text analysis Lingware resource file.   */
@@ -420,7 +554,7 @@ int Pico::setup()
     strcpy((char *) picoTaFileName, picoLingwarePath);
     
     // check for connecting slash
-    unsigned int len = strlen( picoTaFileName );
+    unsigned int len = strlen( (const char*)picoTaFileName );
     if ( picoTaFileName[len-1] != '/' )
         strcat((char*) picoTaFileName, "/");
 
@@ -436,7 +570,7 @@ int Pico::setup()
 
     /* Load the signal generation Lingware resource file.   */
     // FIXME: free?
-    picoSgFileName      = (pico_Char *) malloc( PICO_MAX_DATAPATH_NAME_SIZE + PICO_MAX_FILE_NAME_SIZE );
+    picoSgFileName = (pico_Char *) malloc( PICO_MAX_DATAPATH_NAME_SIZE + PICO_MAX_FILE_NAME_SIZE );
 
     strcpy((char *) picoSgFileName,   picoLingwarePath );
     strcat((char *) picoSgFileName,   voices.getSgName() );
@@ -453,7 +587,7 @@ int Pico::setup()
     if((ret = pico_getResourceName( picoSystem, picoTaResource, (char *) picoTaResourceName ))) {
         pico_getSystemStatusMessage(picoSystem, ret, outMessage);
         fprintf(stderr, "Cannot get the text analysis resource name (%i): %s\n", ret, outMessage);
-        goto unloadUtppResource;
+        goto unloadSgResource;
     }
 
     /* Get the signal generation resource name. */
@@ -462,37 +596,38 @@ int Pico::setup()
     if((ret = pico_getResourceName( picoSystem, picoSgResource, (char *) picoSgResourceName ))) {
         pico_getSystemStatusMessage(picoSystem, ret, outMessage);
         fprintf(stderr, "Cannot get the signal generation resource name (%i): %s\n", ret, outMessage);
-        goto unloadUtppResource;
+        goto unloadSgResource;
     }
 
     /* Create a voice definition.   */
-    if((ret = pico_createVoiceDefinition( picoSystem, (const pico_Char *) PICO_VOICE_NAME ))) {
+    if((ret = pico_createVoiceDefinition( picoSystem, (const pico_Char *) picoVoiceName ))) {
         pico_getSystemStatusMessage(picoSystem, ret, outMessage);
         fprintf(stderr, "Cannot create voice definition (%i): %s\n", ret, outMessage);
-        goto unloadUtppResource;
+        goto unloadSgResource;
     }
 
     /* Add the text analysis resource to the voice. */
-    if((ret = pico_addResourceToVoiceDefinition( picoSystem, (const pico_Char *) PICO_VOICE_NAME, picoTaResourceName ))) {
+    if((ret = pico_addResourceToVoiceDefinition( picoSystem, (const pico_Char *) picoVoiceName, picoTaResourceName ))) {
         pico_getSystemStatusMessage(picoSystem, ret, outMessage);
         fprintf(stderr, "Cannot add the text analysis resource to the voice (%i): %s\n", ret, outMessage);
-        goto unloadUtppResource;
+        goto unloadSgResource;
     }
 
     /* Add the signal generation resource to the voice. */
-    if((ret = pico_addResourceToVoiceDefinition( picoSystem, (const pico_Char *) PICO_VOICE_NAME, picoSgResourceName ))) {
+    if((ret = pico_addResourceToVoiceDefinition( picoSystem, (const pico_Char *) picoVoiceName, picoSgResourceName ))) {
         pico_getSystemStatusMessage(picoSystem, ret, outMessage);
         fprintf(stderr, "Cannot add the signal generation resource to the voice (%i): %s\n", ret, outMessage);
-        goto unloadUtppResource;
+        goto unloadSgResource;
     }
 
     /* Create a new Pico engine. */
-    if((ret = pico_newEngine( picoSystem, (const pico_Char *) PICO_VOICE_NAME, &picoEngine ))) {
+    if((ret = pico_newEngine( picoSystem, (const pico_Char *) picoVoiceName, &picoEngine ))) {
         pico_getSystemStatusMessage(picoSystem, ret, outMessage);
         fprintf(stderr, "Cannot create a new pico engine (%i): %s\n", ret, outMessage);
         goto disposeEngine;
     }
 
+    /* success */
     return 0;
 
 
@@ -506,16 +641,10 @@ disposeEngine:
         picoos_sdfCloseOut(common, &sdOutFile);
         sdOutFile = 0;
     }
-
     if (picoEngine) {
         pico_disposeEngine( picoSystem, &picoEngine );
-        pico_releaseVoiceDefinition( picoSystem, (pico_Char *) PICO_VOICE_NAME );
+        pico_releaseVoiceDefinition( picoSystem, (pico_Char *) picoVoiceName );
         picoEngine = 0;
-    }
-unloadUtppResource:
-    if (picoUtppResource) {
-        pico_unloadResource( picoSystem, &picoUtppResource );
-        picoUtppResource = 0;
     }
 unloadSgResource:
     if (picoSgResource) {
@@ -527,7 +656,7 @@ unloadTaResource:
         pico_unloadResource( picoSystem, &picoTaResource );
         picoTaResource = 0;
     }
-terminate:
+unloadPicoSystem:
     if (picoSystem) {
         pico_terminate(&picoSystem);
         picoSystem = 0;
@@ -538,21 +667,17 @@ terminate:
 
 void Pico::cleanup() 
 {
+    // close output wave file
     if ( sdOutFile ) {
-        // close output wave file
+        picoos_Common common = (picoos_Common) pico_sysGetCommon(picoSystem);
         picoos_sdfCloseOut(common, &sdOutFile);
         sdOutFile = 0;
     }
 
     if (picoEngine) {
         pico_disposeEngine( picoSystem, &picoEngine );
-        pico_releaseVoiceDefinition( picoSystem, (pico_Char *) PICO_VOICE_NAME );
+        pico_releaseVoiceDefinition( picoSystem, (pico_Char *) picoVoiceName );
         picoEngine = 0;
-    }
-
-    if (picoUtppResource) {
-        pico_unloadResource( picoSystem, &picoUtppResource );
-        picoUtppResource = 0;
     }
 
     if (picoSgResource) {
@@ -571,13 +696,13 @@ void Pico::cleanup()
     }
 }
 
-void Pico::sendTextForProcessing( const char * words, int word_len )
+void Pico::sendTextForProcessing( unsigned char * words, int word_len )
 {
     local_text      = (pico_Char *) words;
     text_remaining  = word_len;
 }
 
-int Pico::processText( char * pcm_buffer, int buf_len ) 
+int Pico::process() 
 {
     const int       MAX_OUTBUF_SIZE     = 128;
     const int       bufferSize          = 256;
@@ -586,22 +711,20 @@ int Pico::processText( char * pcm_buffer, int buf_len )
     pico_Int16      bytes_sent, bytes_recv, out_data_type;
     short           outbuf[MAX_OUTBUF_SIZE/2];
     pico_Retstring  outMessage;
-
+    char            pcm_buffer[8000];
+    int             ret, getstatus;
 
     inp = (pico_Char *) local_text;
     unsigned int bufused = 0;
+    memset( pcm_buffer, 0, 8000 );
 
-
-/*
+    // open output WAVE/PCM for writing
     picoos_bool done = TRUE;
-    if(TRUE != (done = picoos_sdfOpenOut(common, &sdOutFile,
-        (picoos_char *) wavefile, SAMPLE_FREQ_16KHZ, PICOOS_ENC_LIN)))
-    {   
+    picoos_Common common = (picoos_Common) pico_sysGetCommon(picoSystem);
+    if ( TRUE != (done=picoos_sdfOpenOut(common, &sdOutFile, (picoos_char *)out_filename, SAMPLE_FREQ_16KHZ, PICOOS_ENC_LIN)) ) {   
         fprintf(stderr, "Cannot open output wave file\n");
         return -1;
     }
-*/
-
 
     /* synthesis loop   */
     while (text_remaining) 
@@ -629,48 +752,32 @@ int Pico::processText( char * pcm_buffer, int buf_len )
                 return -4;
             }
 
+            /* copy partial encoding and get more bytes */
             if ( bytes_recv > 0 ) 
             {
                 memcpy( pcm_buffer+bufused, (int8_t *)outbuf, bytes_recv );
                 bufused += bytes_recv;
             }
 
-            if ( bufused >= buf_len ) 
+            /* or write the buffer to wavefile, and retrieve any leftover decoding bytes */
+            else
             {
-                return bufused;
-            }
+                done = picoos_sdfPutSamples( sdOutFile, bufused / 2, (picoos_int16*) pcm_buffer );
 
-#if 0
-            /* ...and add them to the buffer. */
-            if (bytes_recv) {
-                if ((bufused + bytes_recv) <= bufferSize) {
-                    memcpy( pcm_buffer+bufused, (int8_t *)outbuf, bytes_recv );
-                    bufused += bytes_recv;
-                } else {
-/*
-                    done = picoos_sdfPutSamples(
-                                        sdOutFile,
-                                        bufused / 2,
-                                        (picoos_int16*) (buffer));
-*/
-                    bufused = 0;
+                bufused = 0;
+
+                if ( bytes_recv ) {
                     memcpy( pcm_buffer, (int8_t *)outbuf, bytes_recv );
                     bufused += bytes_recv;
                 }
             }
-#endif
 
         } while (PICO_STEP_BUSY == getstatus);
 
 
         /* This chunk of synthesis is finished; pass the remaining samples. */
         if (!picoSynthAbort) {
-/*
-                    done = picoos_sdfPutSamples(
-                                        sdOutFile,
-                                        bufused / 2,
-                                        (picoos_int16*) (buffer));
-*/
+            done = picoos_sdfPutSamples( sdOutFile, bufused / 2, (picoos_int16*) pcm_buffer );
         }
         picoSynthAbort = 0;
     }
@@ -682,6 +789,7 @@ void Pico::setVoice( const char * v ) {
     voices.setVoice( v );
 }
 
+//////////////////////////////////////////////////////////////////
 
 
 
@@ -693,13 +801,21 @@ int main( int argc, const char ** argv )
     // 
     if ( nano->check_args() < 0 ) {
         delete nano;
-        exit( 0 );
+        return -1;
     }
 
     // 
     if ( nano->setup_input_output() < 0 ) {
         delete nano;
-        exit( 0 );
+        return -2;
+    }
+
+    // 
+    unsigned char * words   = 0;
+    unsigned int    length  = 0;
+    if ( nano->getInput( &words, &length ) < 0 ) {
+        delete nano;
+        return -3;
     }
 
     //
@@ -707,34 +823,17 @@ int main( int argc, const char ** argv )
     pico->setup();
     pico->setVoice( nano->getVoice() );
     pico->setPath( nano->getPath() );
+    pico->setOutFilename( nano->outFilename() );
 
+    //
+    pico->sendTextForProcessing( words, length ); 
 
-    char * words = 0;
-    int length = 0;
-    char pcm_buffer[ 8000 ];
-    int bytes = 0;
+    //
+    pico->process();
 
-    do {
-        nano->getInput( &words, &length );
-        if ( 0 == length )
-            break;
+    //
+    //nano->setOutput();
 
-        pico->sendTextForProcessing( words, length ); 
-
-        do {
-            bytes = pico->processText( pcm_buffer, 8000 );
-            if ( bytes < 0 ) 
-                goto speedy_exit;
-            if ( 0 == bytes )
-                break;
-        }
-        while(1)
-    }
-    while(1);
-
-    //nano->sendOutput( pcm_buffer, bytes );
-
-speedy_exit:
     delete pico;
     delete nano;
 }

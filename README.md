@@ -9,20 +9,25 @@ Speech synthesizer commandline utility that improves pico2wave, included with SV
 
 Rewrite pico2wave front-end into something vastly more user friendly. 
 
-Ideally, add features to aid automatic parsing of large text-files (50k+ words) into small batches of automatically named .wav or .mp3 files. The goal is to aid in the structured digestion of papers/articles/books, but also to make more versatile for many other speech synth uses as well.
+Ideally, add features to aid automatic parsing of large text-files (50k+ words) into small batches of automatically named .wav or .mp3 files. The goal is to aid in the structured digestion of papers/articles/books, but also to make more versatile for many other speech synthesization uses as well.
 
 
 Steps: 
 - [x] get a bare-bones working implementation of picotts, sans cruft
 - [ ] create cmdline file: 
-    - [ ] reads WORDS from stdin, plays WAVE on device pcm (default)
-    - [ ] reads WORDS from cmdline (-w <words>), writes WAVE to file (-o [optional-name])
-    - [ ] reads WORDS from file (-f <filename>), writes WAVE to stdout (-c)
 - [ ] implement cmdline switches that do:
+    - [X] print detailed help (-h, --help)
+    - [ ] reads WORDS from stdin        (default, if no other input modes detected)
+    - [ ] reads WORDS from cmdline      (-w <words>)
+    - [ ] reads WORDS from file         (-f <filename>) 
+    - [ ] writes WAVE to file (-p [prefix], -o [outputname](overrides prefix; both add file-extension if needed))
+    - --------
+    - [ ] plays WAVE on device pcm (-play|-m)
+    - [ ] writes WAVE PCM-data to stdout (-c)
     - [ ] select voice (-v <voice>)
-    - [ ] set voice file directory path (-p <path>)
+    - [ ] set voice files (lingware) path (-l <path>)
+    - [ ] able to read multiple files at once (-files <file1>[file2][file3][..])
     - [ ] works on both Mac and Linux
-    - [ ] print detailed help (-h, --help)
 - [ ] extra:
     - [ ] slow-down/speed-up speaking rate of voice
     - [ ] bit-rate, frequency, channel, parms for .wav 
