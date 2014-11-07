@@ -99,7 +99,7 @@ public:
     int setup_input_output() ;
 
     int getInput( unsigned char ** data, unsigned int * bytes );
-    void sendOutput( char * data, unsigned int size );
+    void playOutput();
 
     int  pcmSetup();
     void pcmPlay( char * , unsigned int );
@@ -316,7 +316,7 @@ int Nano::setup_input_output()
         // detect if stdin is coming from a pipe
         if ( ! isatty(fileno(stdin)) ) { // On windows prefix with underscores: _isatty, _fileno
             in_fp = stdin;
-fprintf( stderr, "definitely using stdin\n" );
+fprintf( stderr, "using stdin\n" );
         } else {
             fprintf( stderr, " **error: reading from stdin\n" );
             return -1;
@@ -384,12 +384,32 @@ int Nano::getInput( unsigned char ** data, unsigned int * bytes )
 }
 
 // 
-void Nano::sendOutput( char * data, unsigned int size ) {
-    unsigned int usize = (unsigned) size;
-    pcmPlay( data, usize );
+void Nano::playOutput() 
+{
+    pcmSetup();
+
+    if ( (out_fp = fopen( out_filename, "wb" )) == 0 ) {
+        fprintf( stderr, "couldn't find the PCM output\n" );
+        return;
+    }
+    
+    unsigned int usize;
+    unsigned char * data = memorymap_file_open( 0, &usize, out_fp );
+    if ( !data ) {
+        fprintf( stderr, "error mmap'ing .wav\n" );
+        pcmShutdown();
+        return;
+    }
+
+    pcmPlay( (char*)data, usize );
+
+    memorymap_file_close( data, usize );
+
+    pcmShutdown();
 }
 
-int Nano::pcmSetup() {
+int Nano::pcmSetup() 
+{
     /* -- Initialize -- */
     ao_initialize();
 
@@ -412,8 +432,10 @@ int Nano::pcmSetup() {
     return 0;
 }
 
-void Nano::pcmPlay( char * buffer, unsigned int bytes ) {
+void Nano::pcmPlay( char * buffer, unsigned int bytes ) 
+{
     ao_play( pcm_device, buffer, bytes );
+    fprintf( stderr, "finished playing wav\n" );
 }
 
 void Nano::pcmShutdown() {
@@ -433,9 +455,11 @@ const char * Nano::getPath() {
 unsigned char * Nano::memorymap_file_open( const char * _filename, unsigned int *sz, FILE * fp )
 {
     // no filename. assume its already open
+/*
     if ( _filename ) {
         char * filename = realpath( _filename, NULL );
     }
+*/
 
     // filenum
     int filenum = ::fileno( fp );
@@ -538,13 +562,13 @@ int Pico::setup()
     void *          picoMemArea             = 0;
     pico_Char *     picoTaFileName          = 0;
     pico_Char *     picoSgFileName          = 0;
-    pico_Char *     picoUtppFileName        = 0;
+//    pico_Char *     picoUtppFileName        = 0;
+//    pico_Char *     picoUtppResourceName    = 0;
     pico_Char *     picoTaResourceName      = 0;
     pico_Char *     picoSgResourceName      = 0;
-    pico_Char *     picoUtppResourceName    = 0;
     const int       PICO_MEM_SIZE           = 2500000;
-    int             ret, getstatus;
     pico_Retstring  outMessage;
+    int             ret;
 
 
 
@@ -554,7 +578,7 @@ int Pico::setup()
     if ( (ret = pico_initialize( picoMemArea, PICO_MEM_SIZE, &picoSystem )) ) {
         pico_getSystemStatusMessage(picoSystem, ret, outMessage);
         fprintf(stderr, "Cannot initialize pico (%i): %s\n", ret, outMessage);
-        //goto unloadPicoSystem;
+
         pico_terminate(&picoSystem);
         picoSystem = 0;
         return -1;
@@ -637,7 +661,8 @@ int Pico::setup()
     }
 
     /* Create a new Pico engine. */
-    if((ret = pico_newEngine( picoSystem, (const pico_Char *) picoVoiceName, &picoEngine ))) { pico_getSystemStatusMessage(picoSystem, ret, outMessage);
+    if((ret = pico_newEngine( picoSystem, (const pico_Char *) picoVoiceName, &picoEngine ))) { 
+        pico_getSystemStatusMessage(picoSystem, ret, outMessage);
         fprintf(stderr, "Cannot create a new pico engine (%i): %s\n", ret, outMessage);
         goto disposeEngine;
     }
@@ -651,11 +676,6 @@ int Pico::setup()
     //  for pico cleanup in case of startup abort
     //
 disposeEngine:
-    if ( sdOutFile ) {
-        picoos_Common common = (picoos_Common) pico_sysGetCommon(picoSystem);
-        picoos_sdfCloseOut(common, &sdOutFile);
-        sdOutFile = 0;
-    }
     if (picoEngine) {
         pico_disposeEngine( picoSystem, &picoEngine );
         pico_releaseVoiceDefinition( picoSystem, (pico_Char *) picoVoiceName );
@@ -671,7 +691,7 @@ unloadTaResource:
         pico_unloadResource( picoSystem, &picoTaResource );
         picoTaResource = 0;
     }
-unloadPicoSystem:
+
     if (picoSystem) {
         pico_terminate(&picoSystem);
         picoSystem = 0;
@@ -682,7 +702,6 @@ unloadPicoSystem:
 
 void Pico::cleanup() 
 {
-    // close output wave file
     if ( sdOutFile ) {
         picoos_Common common = (picoos_Common) pico_sysGetCommon(picoSystem);
         picoos_sdfCloseOut(common, &sdOutFile);
@@ -717,10 +736,9 @@ void Pico::sendTextForProcessing( unsigned char * words, int word_len )
     text_remaining  = word_len;
 }
 
-int Pico::process() 
+int Pico::process()
 {
     const int       MAX_OUTBUF_SIZE     = 128;
-    const int       bufferSize          = 256;
     pico_Char *     inp                 = 0;
     int             picoSynthAbort      = 0;
     pico_Int16      bytes_sent, bytes_recv, out_data_type;
@@ -742,7 +760,7 @@ int Pico::process()
     }
 
     /* synthesis loop   */
-    while (text_remaining) 
+    while (text_remaining > 0) 
     {
         /* Feed the text into the engine.   */
         if((ret = pico_putTextUtf8( picoEngine, inp, text_remaining, &bytes_sent ))) {
@@ -797,6 +815,14 @@ int Pico::process()
         picoSynthAbort = 0;
     }
 
+
+    // close output wave file, so it can be opened elsewhere
+    if ( sdOutFile ) {
+        picoos_Common common = (picoos_Common) pico_sysGetCommon(picoSystem);
+        picoos_sdfCloseOut(common, &sdOutFile);
+        sdOutFile = 0;
+    }
+
     return bufused;
 }
 
@@ -835,13 +861,13 @@ int main( int argc, const char ** argv )
 
     //
     Pico *pico = new Pico();
-    pico->setup();
+    pico->setPath( nano->getPath() );
+    pico->setOutFilename( nano->outFilename() );
     if ( pico->setVoice( nano->getVoice() ) < 0 ) {
         fprintf( stderr, "set voice failed, with: \"%s\n\"", nano->getVoice() );
         goto fast_exit;
     }
-    pico->setPath( nano->getPath() );
-    pico->setOutFilename( nano->outFilename() );
+    pico->setup();
 
     //
     pico->sendTextForProcessing( words, length ); 
@@ -850,7 +876,7 @@ int main( int argc, const char ** argv )
     pico->process();
 
     //
-    //nano->setOutput();
+    nano->playOutput();
 
 fast_exit:
     delete pico;

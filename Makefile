@@ -10,7 +10,7 @@ svoxpico/.libs/libttspico.a:
 	cd svoxpico; ./autogen.sh && ./configure && make
 
 nanotts:
-	g++ -I. -I./svoxpico -g ${OPT_FLAG} -c -o nanotts.o src/nanotts.cpp
+	g++ -I. -I./svoxpico -Wall -g ${OPT_FLAG} -c -o nanotts.o src/nanotts.cpp
 	g++ -L./svoxpico/.libs nanotts.o svoxpico/.libs/libttspico.a -g ${OPT_FLAG} -o nanotts -lao -ldl -lm
 
 clean:
