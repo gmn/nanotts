@@ -19,8 +19,8 @@ private:
 public:
     PicoVoices_t();
     ~PicoVoices_t();
-    void setVoice( int );
-    void setVoice( const char * );
+    int setVoice( int );
+    int setVoice( const char * );
     const char * getTaName() ;
     const char * getSgName() ;
 };
@@ -81,23 +81,27 @@ PicoVoices_t::~PicoVoices_t() {
     delete[] picoInternalUtppLingware;
 }
 
-void PicoVoices_t::setVoice( int i ) {
-    if ( i >= 0 && i < 6 )
+int PicoVoices_t::setVoice( int i ) {
+    if ( i >= 0 && i < 6 ) {
         voice = i;
+        return 0;
+    }
+    return -1;
 }
 
-void PicoVoices_t::setVoice( const char * voc ) {
+int PicoVoices_t::setVoice( const char * voc ) {
     char ** matchable[] = { picoSupportedLang, picoSupportedLangIso3, picoSupportedCountryIso3, 0 };
     for ( int i = 0; i < 6; i++ ) {
         char ** p = *matchable;
         while ( p ) {
             if ( strcmp( p[i], voc ) == 0 ) {
                 voice = i;
-                break;
+                return i;
             }
             ++p;
         }
     }
+    return -1;
 }
 
 const char * PicoVoices_t::getTaName() {

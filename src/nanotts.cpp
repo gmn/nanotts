@@ -147,7 +147,15 @@ Nano::~Nano() {
     }
 
     if ( input_buffer ) {
-        memorymap_file_close( input_buffer, input_size );
+        switch ( in_mode ) {
+        case IN_STDIN: 
+            delete[] input_buffer;
+            break;
+        case IN_SINGLE_FILE:
+            memorymap_file_close( input_buffer, input_size );
+        default:
+            break;
+        }
         input_buffer = 0;
     }
 
@@ -308,6 +316,7 @@ int Nano::setup_input_output()
         // detect if stdin is coming from a pipe
         if ( ! isatty(fileno(stdin)) ) { // On windows prefix with underscores: _isatty, _fileno
             in_fp = stdin;
+fprintf( stderr, "definitely using stdin\n" );
         } else {
             fprintf( stderr, " **error: reading from stdin\n" );
             return -1;
@@ -352,7 +361,12 @@ int Nano::getInput( unsigned char ** data, unsigned int * bytes )
 {
     switch( in_mode ) {
     case IN_STDIN:
-        input_buffer = memorymap_file_open( 0, &input_size, in_fp );
+
+        input_buffer = new unsigned char[ 1000000 ];
+        memset( input_buffer, 0, 1000000 );
+
+        input_size = fread( input_buffer, 1, 1000000, stdin );
+ fprintf( stderr, "read: %u bytes from stdin\n", input_size );
         *data = input_buffer;
         *bytes = input_size;
         break;
@@ -423,19 +437,21 @@ unsigned char * Nano::memorymap_file_open( const char * _filename, unsigned int 
         char * filename = realpath( _filename, NULL );
     }
 
-    // fileno
-    int fileno = ::fileno( fp );
+    // filenum
+    int filenum = ::fileno( fp );
+
+fprintf( stderr, "filenum: %d\n", filenum );
 
     // filesize
     struct stat st;
-    if ( fstat( fileno, &st ) == -1 || st.st_size == 0 ) {
+    if ( fstat( filenum, &st ) == -1 || st.st_size == 0 ) {
         fprintf( stderr, "couldn't stat input file\n" );
         return 0;
     }
     *sz = st.st_size;
 
     // mmap the file
-    unsigned char * data = (unsigned char *) mmap( 0, st.st_size, PROT_READ, MAP_SHARED, fileno, 0 );
+    unsigned char * data = (unsigned char *) mmap( 0, st.st_size, PROT_READ, MAP_SHARED, filenum, 0 );
 
     return data;
 }
@@ -483,7 +499,7 @@ public:
     void sendTextForProcessing( unsigned char *, int ) ;
     int process() ;
 
-    void setVoice( const char * );
+    int setVoice( const char * );
     void setOutFilename( const char * fn ) { out_filename = const_cast<char*>(fn); }
 };
 
@@ -526,7 +542,7 @@ int Pico::setup()
     pico_Char *     picoTaResourceName      = 0;
     pico_Char *     picoSgResourceName      = 0;
     pico_Char *     picoUtppResourceName    = 0;
-    const int       PICO_MEM_SIZE           = 8000;
+    const int       PICO_MEM_SIZE           = 2500000;
     int             ret, getstatus;
     pico_Retstring  outMessage;
 
@@ -621,8 +637,7 @@ int Pico::setup()
     }
 
     /* Create a new Pico engine. */
-    if((ret = pico_newEngine( picoSystem, (const pico_Char *) picoVoiceName, &picoEngine ))) {
-        pico_getSystemStatusMessage(picoSystem, ret, outMessage);
+    if((ret = pico_newEngine( picoSystem, (const pico_Char *) picoVoiceName, &picoEngine ))) { pico_getSystemStatusMessage(picoSystem, ret, outMessage);
         fprintf(stderr, "Cannot create a new pico engine (%i): %s\n", ret, outMessage);
         goto disposeEngine;
     }
@@ -785,8 +800,8 @@ int Pico::process()
     return bufused;
 }
 
-void Pico::setVoice( const char * v ) {
-    voices.setVoice( v );
+int Pico::setVoice( const char * v ) {
+    return voices.setVoice( v ) ;
 }
 
 //////////////////////////////////////////////////////////////////
@@ -821,7 +836,10 @@ int main( int argc, const char ** argv )
     //
     Pico *pico = new Pico();
     pico->setup();
-    pico->setVoice( nano->getVoice() );
+    if ( pico->setVoice( nano->getVoice() ) < 0 ) {
+        fprintf( stderr, "set voice failed, with: \"%s\n\"", nano->getVoice() );
+        goto fast_exit;
+    }
     pico->setPath( nano->getPath() );
     pico->setOutFilename( nano->outFilename() );
 
@@ -834,6 +852,7 @@ int main( int argc, const char ** argv )
     //
     //nano->setOutput();
 
+fast_exit:
     delete pico;
     delete nano;
 }
