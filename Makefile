@@ -11,7 +11,8 @@ svoxpico/.libs/libttspico.a:
 
 nanotts:
 	g++ -I. -I./svoxpico -Wall -g ${OPT_FLAG} -c -o nanotts.o src/nanotts.cpp
-	g++ -L./svoxpico/.libs nanotts.o svoxpico/.libs/libttspico.a -g ${OPT_FLAG} -o nanotts -lao -ldl -lm
+	g++ -I. -I./svoxpico -Wall -g ${OPT_FLAG} -c -o mmfile.o src/mmfile.cpp
+	g++ -L./svoxpico/.libs mmfile.o nanotts.o svoxpico/.libs/libttspico.a -g ${OPT_FLAG} -o nanotts -lao -ldl -lm
 
 clean:
-	rm nanotts.o nanotts
+	rm mmfile.o nanotts.o nanotts

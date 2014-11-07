@@ -39,7 +39,7 @@ extern "C" {
 }
 
 #include "PicoVoices.h"
-
+#include "mmfile.h"
 
 /*
 ================================================
@@ -90,6 +90,8 @@ private:
     unsigned char * input_buffer;
     unsigned int    input_size;
 
+    mmfile_t *      mmfile;
+
 public:
     Nano( const int, const char ** );
     ~Nano();
@@ -108,8 +110,8 @@ public:
     const char * getVoice();
     const char * getPath();
 
-    static unsigned char * memorymap_file_open( const char *, unsigned int *, FILE * );
-    static void memorymap_file_close( void * , unsigned int );
+    //static unsigned char * memorymap_file_open( const char *, unsigned int *, FILE * );
+    //static void memorymap_file_close( void * , unsigned int );
 
     const char * outFilename() const { return out_filename; }
 };
@@ -152,7 +154,9 @@ Nano::~Nano() {
             delete[] input_buffer;
             break;
         case IN_SINGLE_FILE:
-            memorymap_file_close( input_buffer, input_size );
+            //memorymap_file_close( input_buffer, input_size );
+            delete mmfile;
+            mmfile = 0;
         default:
             break;
         }
@@ -371,9 +375,14 @@ int Nano::getInput( unsigned char ** data, unsigned int * bytes )
         *bytes = input_size;
         break;
     case IN_SINGLE_FILE:
+        /*
         input_buffer = memorymap_file_open( in_filename, &input_size, in_fp );
         *data = input_buffer;
         *bytes = input_size;
+        */
+        mmfile = new mmfile_t( in_filename );
+        *data = mmfile->data;
+        *bytes = mmfile->size;
         break;
     default:
         fprintf( stderr, "unknown input\n" );
@@ -388,22 +397,28 @@ void Nano::playOutput()
 {
     pcmSetup();
 
+/*
     if ( (out_fp = fopen( out_filename, "wb" )) == 0 ) {
         fprintf( stderr, "couldn't find the PCM output\n" );
         return;
     }
     
-    unsigned int usize;
-    unsigned char * data = memorymap_file_open( 0, &usize, out_fp );
-    if ( !data ) {
+    //unsigned int usize;
+    //unsigned char * data = memorymap_file_open( 0, &usize, out_fp );
+*/
+
+    mmfile_t * mmap_wav = new mmfile_t( out_filename );
+
+    if ( !mmap_wav->data ) {
         fprintf( stderr, "error mmap'ing .wav\n" );
         pcmShutdown();
         return;
     }
 
-    pcmPlay( (char*)data, usize );
+    pcmPlay( (char*)mmap_wav->data, mmap_wav->size );
 
-    memorymap_file_close( data, usize );
+    //memorymap_file_close( data, usize );
+    delete mmap_wav;
 
     pcmShutdown();
 }
@@ -452,6 +467,7 @@ const char * Nano::getPath() {
     return voicedir;
 }
 
+#if 0
 unsigned char * Nano::memorymap_file_open( const char * _filename, unsigned int *sz, FILE * fp )
 {
     // no filename. assume its already open
@@ -479,13 +495,13 @@ fprintf( stderr, "filenum: %d\n", filenum );
 
     return data;
 }
-
 void Nano::memorymap_file_close( void *data, unsigned int size )
 {
     if ( data )
         if ( -1 == munmap( data, size ) )
             fprintf( stderr, "failed to unmap file\n" );
 }
+#endif
 
 //////////////////////////////////////////////////////////////////
 
