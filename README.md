@@ -17,13 +17,16 @@ Steps:
 - [ ] create cmdline file: 
 - [ ] implement cmdline switches that do:
     - [X] print detailed help (-h, --help)
-    - [ ] reads WORDS from stdin        (default, if no other input modes detected)
+    - [X] reads WORDS from stdin        (default, if no other input modes detected)
     - [ ] reads WORDS from cmdline      (-w <words>)
-    - [ ] reads WORDS from file         (-f <filename>) 
-    - [ ] writes WAVE to file (-p [prefix], -o [outputname](overrides prefix; both add file-extension if needed))
+    - [X] reads WORDS from file         (-f <filename>) 
+    - [X] writes WAVE to file (-p [prefix], -o [outputname](overrides prefix; both add file-extension if needed))
     - --------
-    - [ ] plays WAVE on device pcm (-play|-m)
-    - [ ] writes WAVE PCM-data to stdout (-c)
+    - [ ] limit text input to N lines
+    - [ ] catch signals to cancel PCM output cleanly
+    - [ ] cleanup printed output
+    - [ ] DONT play on device pcm (--no-play|-m)
+    - [ ] writes PCM-data to stdout (-c)
     - [ ] select voice (-v <voice>)
     - [ ] set voice files (lingware) path (-l <path>)
     - [ ] able to read multiple files at once (-files <file1>[file2][file3][..])
