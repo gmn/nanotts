@@ -41,6 +41,49 @@ extern "C" {
 #include "PicoVoices.h"
 #include "mmfile.h"
 
+class Nano;
+
+
+/*
+================================================
+Listener
+
+stream class, for exchanging byte-streams between producer/consumer
+================================================
+*/
+template <typename type>
+class Listener {
+    type * data;
+    unsigned int read_p;
+    void (Nano::*consume)( unsigned short *, unsigned int );
+    Nano* nano_class;
+public:
+    Listener() : data(0), read_p(0), consume(0), nano_class(0) {
+    }
+    virtual ~Listener() {
+    }
+
+    void writeData( type * data, unsigned int byte_size );
+    void setCallback( void (Nano::*con_f)( unsigned short *, unsigned int ), Nano* ) ;
+};
+
+template <typename type>
+void Listener<type>::writeData( type * data, unsigned int byte_size ) {
+    if ( this->consume ) {
+        void (Nano::*pointer)(unsigned short *, unsigned int) = this->consume;
+        (*nano_class.*pointer)( data, byte_size );
+    }
+}
+
+template <typename type>
+void Listener<type>::setCallback( void (Nano::*con_f)( unsigned short *, unsigned int ), Nano* nano_class ) {
+    this->consume = con_f;
+    this->nano_class = nano_class;
+}
+//////////////////////////////////////////////////////////////////
+
+
+
 /*
 ================================================
 Nano
@@ -48,6 +91,7 @@ Nano
 Singleton class to handle workings of this program
 ================================================
 */
+
 class Nano 
 {
 private:
@@ -59,10 +103,9 @@ private:
     };
 
     enum outputMode_t {
-        OUT_PLAYBACK,
         OUT_STDOUT,
-        OUT_MULTIPLE_FILES,
-        OUT_SINGLE_FILE
+        OUT_SINGLE_FILE,
+        OUT_MULTIPLE_FILES
     };
 
     inputMode_t     in_mode;
@@ -92,6 +135,9 @@ private:
 
     mmfile_t *      mmfile;
 
+    Listener<unsigned short>    stdout_processor;
+    void write_short_to_stdout( unsigned short *, unsigned int );
+
 public:
     bool            silence_output;
 
@@ -112,10 +158,9 @@ public:
     const char * getVoice();
     const char * getPath();
 
-    //static unsigned char * memorymap_file_open( const char *, unsigned int *, FILE * );
-    //static void memorymap_file_close( void * , unsigned int );
-
     const char * outFilename() const { return out_filename; }
+
+    Listener<unsigned short> * getListener() ; 
 };
 
 Nano::Nano( const int i, const char ** v ) : my_argc(i), my_argv(v) {
@@ -132,6 +177,7 @@ Nano::Nano( const int i, const char ** v ) : my_argc(i), my_argv(v) {
     input_size = 0;
 
     silence_output = false;
+    stdout_processor.setCallback( &Nano::write_short_to_stdout, this );
 }
 
 Nano::~Nano() {
@@ -158,7 +204,6 @@ Nano::~Nano() {
             delete[] input_buffer;
             break;
         case IN_SINGLE_FILE:
-            //memorymap_file_close( input_buffer, input_size );
             delete mmfile;
             mmfile = 0;
         default:
@@ -179,21 +224,6 @@ Nano::~Nano() {
 }
 
 void Nano::PrintUsage() {
-    struct help {
-        const char *arg;
-        const char *desc;
-    } helps[] = {
-        { "-h, --help", "displays this" },
-        { "-v <voice>", "select voice. Default: en-GB" },
-        { "-l <directory>", "Lingware voices directory. Default: \"./lang\"" },
-        { "-w <words>", "words. must be correctly quoted" },
-        { "-f <filename>", "filename to read input from" },
-        { "-p <prefix>", "write output to multiple numbered files with prefix" },
-        { "-o <filename>", "write output to single file; overrides prefix" },
-        { "--no-play|-m", "do NOT play output on PC's soundcard" },
-        { "-c ", "send PCM output to stdout" },
-        { "--files", "set multiple input files" }
-    };
 
     const char * program = strrchr( my_argv[0], '/' );
     program = !program ? my_argv[0] : program + 1;
@@ -201,10 +231,40 @@ void Nano::PrintUsage() {
 
     printf( "usage: %s [options]\n", exename );
 
-    unsigned long long int size = *(&helps + 1) - helps;
+    char line1[ 80 ];
+    char line2[ 80 ];
+    char line3[ 80 ];
+    memset( line1, 0, 80 );
+    memset( line2, 0, 80 );
+    sprintf( line1, "  %s -f <filename> --no-play -o file1.wav", exename );
+    sprintf( line2, "  echo \"Mary had a little lamb\" | %s", exename );
+    sprintf( line3, "  %s -w \"Once upon a midnight dreary\" -v en-US", exename );
+
+    struct help {
+        const char *arg;
+        const char *desc;
+    } help_lines[] = {
+        { "-h, --help", "displays this" },
+        { "-v <voice>", "select voice. Default: en-GB" },
+        { "-l <directory>", "Lingware voices directory. Default: \"./lang\"" },
+        { "-w <words>", "words. must be correctly quoted" },
+        { "-f <filename>", "filename to read input from" },
+//        { "-p <prefix>", "write output to multiple numbered files with prefix" },
+        { "-o <filename>", "write output to single file; overrides prefix" },
+        { "--no-play|-m", "do NOT play output on PC's soundcard" },
+        { "-c ", "send PCM output to stdout" },
+//        { "--files", "set multiple input files" },
+        { " ", " " },
+        { "Examples: ", " " },
+        { line1, " " },
+        { line2, " " },
+        { line3, " " },
+    };
+
+    unsigned long long int size = *(&help_lines + 1) - help_lines;
 
     for ( unsigned int i = 0; i < size; i++ ) {
-        printf( " %-14s   %s\n", helps[i].arg, helps[i].desc );
+        printf( " %-14s   %s\n", help_lines[i].arg, help_lines[i].desc );
     }
 }
 
@@ -239,7 +299,7 @@ int Nano::check_args() {
     out_mode = OUT_SINGLE_FILE;
 
 
-    for ( int i = 0; i < my_argc; i++ )
+    for ( int i = 1; i < my_argc; i++ )
     {
         if ( strcmp( my_argv[i], "-h" ) == 0 || strcmp( my_argv[i], "--help" ) == 0 ) {
             PrintUsage();
@@ -330,7 +390,7 @@ int Nano::setup_input_output()
         if ( ! isatty(fileno(stdin)) ) { // On windows prefix with underscores: _isatty, _fileno
             in_fp = stdin;
         } else {
-            fprintf( stderr, " **error: reading from stdin\n" );
+            fprintf( stderr, " **error: reading from stdin.  (try -h for help)\n" );
             return -1;
         }
         break;
@@ -353,14 +413,12 @@ int Nano::setup_input_output()
 
     switch ( out_mode ) {
     case OUT_SINGLE_FILE:
-/* for now, writing output to file is ubiquitous, so perhaps we dont need an out_mode for it
-        if ( (out_fp = fopen( out_filename, "w" )) == 0 )
-            return -1;
-*/
         break;
 
-    case OUT_PLAYBACK:
     case OUT_STDOUT:
+        out_fp = stdout;
+        fprintf( stderr, "writing pcm stream to stdout\n" );
+        break;
     case OUT_MULTIPLE_FILES:
     default:
         __NOT_IMPL__
@@ -409,18 +467,10 @@ void Nano::playOutput()
 {
     if ( silence_output )
         return;
+    if ( out_mode == OUT_STDOUT )
+        return;
 
     pcmSetup();
-
-/*
-    if ( (out_fp = fopen( out_filename, "wb" )) == 0 ) {
-        fprintf( stderr, "couldn't find the PCM output\n" );
-        return;
-    }
-    
-    //unsigned int usize;
-    //unsigned char * data = memorymap_file_open( 0, &usize, out_fp );
-*/
 
     mmfile_t * mmap_wav = new mmfile_t( out_filename );
 
@@ -432,7 +482,6 @@ void Nano::playOutput()
 
     pcmPlay( (char*)mmap_wav->data, mmap_wav->size );
 
-    //memorymap_file_close( data, usize );
     delete mmap_wav;
 
     pcmShutdown();
@@ -482,43 +531,19 @@ const char * Nano::getPath() {
     return voicedir;
 }
 
-#if 0
-unsigned char * Nano::memorymap_file_open( const char * _filename, unsigned int *sz, FILE * fp )
-{
-    // no filename. assume its already open
-/*
-    if ( _filename ) {
-        char * filename = realpath( _filename, NULL );
-    }
-*/
+void Nano::write_short_to_stdout( unsigned short * data, unsigned int shorts ) {
+    if ( out_mode == OUT_STDOUT )
+        fwrite( data, 2, shorts, out_fp );
+}
 
-    // filenum
-    int filenum = ::fileno( fp );
-
-fprintf( stderr, "filenum: %d\n", filenum );
-
-    // filesize
-    struct stat st;
-    if ( fstat( filenum, &st ) == -1 || st.st_size == 0 ) {
-        fprintf( stderr, "couldn't stat input file\n" );
+Listener<unsigned short> * Nano::getListener() { 
+    if ( out_mode != OUT_STDOUT )
         return 0;
-    }
-    *sz = st.st_size;
-
-    // mmap the file
-    unsigned char * data = (unsigned char *) mmap( 0, st.st_size, PROT_READ, MAP_SHARED, filenum, 0 );
-
-    return data;
+    return &stdout_processor; 
 }
-void Nano::memorymap_file_close( void *data, unsigned int size )
-{
-    if ( data )
-        if ( -1 == munmap( data, size ) )
-            fprintf( stderr, "failed to unmap file\n" );
-}
-#endif
-
 //////////////////////////////////////////////////////////////////
+
+
 
 
 /*
@@ -541,9 +566,11 @@ private:
 
     pico_Char *     local_text;
     pico_Int16      text_remaining;
+    long long int   total_text_length;
     char *          picoLingwarePath;
 
     char            picoVoiceName[10];
+    Listener<unsigned short> * listener;
 public:
     Pico() ;
     ~Pico() ;
@@ -551,11 +578,14 @@ public:
     void setPath( const char * path =0 );
     int setup() ;
     void cleanup() ;
-    void sendTextForProcessing( unsigned char *, int ) ;
+    void sendTextForProcessing( unsigned char *, long long int ) ;
     int process() ;
 
     int setVoice( const char * );
     void setOutFilename( const char * fn ) { out_filename = const_cast<char*>(fn); }
+
+    int fileSize( const char * filename ) ;
+    void setListener( Listener<unsigned short> * );
 };
 
 
@@ -569,6 +599,10 @@ Pico::Pico() {
     out_filename        = 0;
 
     strcpy( picoVoiceName, "PicoVoice" );
+
+    total_text_length   = 0;
+    text_remaining      = 0;
+    listener            = 0;
 }
 
 Pico::~Pico() {
@@ -759,10 +793,10 @@ void Pico::cleanup()
     }
 }
 
-void Pico::sendTextForProcessing( unsigned char * words, int word_len )
+void Pico::sendTextForProcessing( unsigned char * words, long long int word_len )
 {
-    local_text      = (pico_Char *) words;
-    text_remaining  = word_len;
+    local_text          = (pico_Char *) words;
+    total_text_length   = word_len;
 }
 
 int Pico::process()
@@ -775,22 +809,37 @@ int Pico::process()
     pico_Retstring  outMessage;
     char            pcm_buffer[ PCM_BUFFER_SIZE ];
     int             ret, getstatus;
+    picoos_bool     done = TRUE;
 
     inp = (pico_Char *) local_text;
     unsigned int bufused = 0;
     memset( pcm_buffer, 0, PCM_BUFFER_SIZE );
 
     // open output WAVE/PCM for writing
-    picoos_bool done = TRUE;
-    picoos_Common common = (picoos_Common) pico_sysGetCommon(picoSystem);
-    if ( TRUE != (done=picoos_sdfOpenOut(common, &sdOutFile, (picoos_char *)out_filename, SAMPLE_FREQ_16KHZ, PICOOS_ENC_LIN)) ) {   
-        fprintf(stderr, "Cannot open output wave file\n");
-        return -1;
+    if ( 0 == listener ) {
+        picoos_Common common = (picoos_Common) pico_sysGetCommon(picoSystem);
+        if ( TRUE != (done=picoos_sdfOpenOut(common, &sdOutFile, (picoos_char *)out_filename, SAMPLE_FREQ_16KHZ, PICOOS_ENC_LIN)) ) {   
+            fprintf(stderr, "Cannot open output wave file\n");
+            return -1;
+        }
     }
 
+    long long int text_length = total_text_length;
+
     /* synthesis loop   */
-    while (text_remaining > 0) 
+    while(1) 
     {
+        //−32,768 to 32,767.
+        if (text_remaining <= 0) 
+        {
+            if ( text_length <= 0 )
+                break;
+
+            int increment = text_length >= 32767 ? 32767 : text_length;
+            text_length -= increment;
+            text_remaining = increment;
+        }
+
         /* Feed the text into the engine.   */
         if ( (ret = pico_putTextUtf8(picoEngine, inp, text_remaining, &bytes_sent)) ) {
             pico_getSystemStatusMessage(picoSystem, ret, outMessage);
@@ -811,7 +860,6 @@ int Pico::process()
                 return -4;
             }
 
-
             /* copy partial encoding and get more bytes */
             if ( bytes_recv > 0 ) 
             {
@@ -823,7 +871,12 @@ int Pico::process()
                 /* or write the buffer to wavefile, and retrieve any leftover decoding bytes */
                 else
                 {
-                    done = picoos_sdfPutSamples( sdOutFile, bufused / 2, (picoos_int16*) pcm_buffer );
+                    if ( 0 == listener ) {
+                        done = picoos_sdfPutSamples( sdOutFile, bufused / 2, (picoos_int16*) pcm_buffer );
+                    } else {
+                        listener->writeData( (unsigned short*)pcm_buffer, bufused/2 );
+                    }
+
                     bufused = 0;
                     memcpy( pcm_buffer, (int8_t *)outbuf, bytes_recv );
                     bufused += bytes_recv;
@@ -833,15 +886,24 @@ int Pico::process()
         } while (PICO_STEP_BUSY == getstatus);
 
         /* This chunk of synthesis is finished; pass the remaining samples. */
-        done = picoos_sdfPutSamples( sdOutFile, bufused / 2, (picoos_int16*) pcm_buffer );
-    }
-
+        if ( 0 == listener ) {
+            done = picoos_sdfPutSamples( sdOutFile, bufused / 2, (picoos_int16*) pcm_buffer );
+        } else {
+            listener->writeData( (unsigned short*)pcm_buffer, bufused/2 );
+        }
+    } 
 
     // close output wave file, so it can be opened elsewhere
     if ( sdOutFile ) {
         picoos_Common common = (picoos_Common) pico_sysGetCommon(picoSystem);
         picoos_sdfCloseOut(common, &sdOutFile);
         sdOutFile = 0;
+
+        // report
+        if ( !strstr( out_filename, "nanotts" ) ) {
+            int bytes = fileSize( out_filename );
+            fprintf( stderr, "wrote \"%s\" (%d bytes)\n", out_filename, bytes );
+        }
     }
 
     return bufused;
@@ -853,6 +915,20 @@ int Pico::setVoice( const char * v ) {
     return r;
 }
 
+int Pico::fileSize( const char * filename ) {
+    FILE * file_p = fopen( filename, "rb" );
+    if ( !file_p )
+        return -1;
+    fseek( file_p, 0L, SEEK_SET );
+    int beginning = ftell( file_p );
+    fseek( file_p, 0L, SEEK_END );
+    int end = ftell( file_p );
+    return end - beginning;
+}
+
+void Pico::setListener( Listener<unsigned short> * listener ) {
+    this->listener = listener;
+}
 //////////////////////////////////////////////////////////////////
 
 
@@ -890,6 +966,7 @@ int main( int argc, const char ** argv )
         fprintf( stderr, "set voice failed, with: \"%s\n\"", nano->getVoice() );
         goto fast_exit;
     }
+    pico->setListener( nano->getListener() );
 
     //
     pico->setup();

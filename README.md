@@ -25,9 +25,10 @@ Steps:
     - [X] cleanup printed output
     - [X] select voice (-v <voice>)
     - --------
+    - [ ] -q flag to silence output to {stdout, stderr}
     - [ ] limit text input to N lines
     - [ ] catch signals to cancel PCM output cleanly
-    - [ ] writes PCM-data to stdout (-c)
+    - [X] writes PCM-data to stdout (-c)
     - [?] set voice files (lingware) path (-l <path>)
     - [ ] able to read multiple files at once (-files <file1>[file2][file3][..])
     - [ ] works on both Mac and Linux
