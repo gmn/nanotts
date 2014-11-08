@@ -42,7 +42,13 @@ Advanced/overkill wish-list features:
 - [ ] advanced feature to carve up large text-file into set of auto-named .mp3
 - [ ] search and replace feature, useful for replacing certain problem characters, such as '-' (pico says "hyphen") that can ruin the flow of a book, so replace '-' with ',' which pico interprets instead as a pause.
 
+## MP3 PIPE example
+```
+echo "eenie meany miny moh" | ./nanotts -c | lame -r -s 16 --bitwidth 16 --signed --little-endian -m m -b 32 -h - out.mp3
+```
 
-a work in progress..
+I know what you're thinking -- it's a mess. Because it's raw PCM, you have to tell lame exactly what format to expect.
+But hey, at least right now it's automatable! 
+
 
 email: _greg AT naughton DOT org_  

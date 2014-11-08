@@ -55,7 +55,7 @@ template <typename type>
 class Listener {
     type * data;
     unsigned int read_p;
-    void (Nano::*consume)( unsigned short *, unsigned int );
+    void (Nano::*consume)( short *, unsigned int );
     Nano* nano_class;
 public:
     Listener() : data(0), read_p(0), consume(0), nano_class(0) {
@@ -64,19 +64,19 @@ public:
     }
 
     void writeData( type * data, unsigned int byte_size );
-    void setCallback( void (Nano::*con_f)( unsigned short *, unsigned int ), Nano* ) ;
+    void setCallback( void (Nano::*con_f)( short *, unsigned int ), Nano* ) ;
 };
 
 template <typename type>
 void Listener<type>::writeData( type * data, unsigned int byte_size ) {
     if ( this->consume ) {
-        void (Nano::*pointer)(unsigned short *, unsigned int) = this->consume;
+        void (Nano::*pointer)(short *, unsigned int) = this->consume;
         (*nano_class.*pointer)( data, byte_size );
     }
 }
 
 template <typename type>
-void Listener<type>::setCallback( void (Nano::*con_f)( unsigned short *, unsigned int ), Nano* nano_class ) {
+void Listener<type>::setCallback( void (Nano::*con_f)( short *, unsigned int ), Nano* nano_class ) {
     this->consume = con_f;
     this->nano_class = nano_class;
 }
@@ -135,8 +135,8 @@ private:
 
     mmfile_t *      mmfile;
 
-    Listener<unsigned short>    stdout_processor;
-    void write_short_to_stdout( unsigned short *, unsigned int );
+    Listener<short> stdout_processor;
+    void write_short_to_stdout( short *, unsigned int );
 
 public:
     bool            silence_output;
@@ -160,7 +160,7 @@ public:
 
     const char * outFilename() const { return out_filename; }
 
-    Listener<unsigned short> * getListener() ; 
+    Listener<short> * getListener() ; 
 };
 
 Nano::Nano( const int i, const char ** v ) : my_argc(i), my_argv(v) {
@@ -531,12 +531,12 @@ const char * Nano::getPath() {
     return voicedir;
 }
 
-void Nano::write_short_to_stdout( unsigned short * data, unsigned int shorts ) {
+void Nano::write_short_to_stdout( short * data, unsigned int shorts ) {
     if ( out_mode == OUT_STDOUT )
         fwrite( data, 2, shorts, out_fp );
 }
 
-Listener<unsigned short> * Nano::getListener() { 
+Listener<short> * Nano::getListener() { 
     if ( out_mode != OUT_STDOUT )
         return 0;
     return &stdout_processor; 
@@ -570,7 +570,7 @@ private:
     char *          picoLingwarePath;
 
     char            picoVoiceName[10];
-    Listener<unsigned short> * listener;
+    Listener<short> * listener;
 public:
     Pico() ;
     ~Pico() ;
@@ -585,7 +585,7 @@ public:
     void setOutFilename( const char * fn ) { out_filename = const_cast<char*>(fn); }
 
     int fileSize( const char * filename ) ;
-    void setListener( Listener<unsigned short> * );
+    void setListener( Listener<short> * );
 };
 
 
@@ -874,7 +874,7 @@ int Pico::process()
                     if ( 0 == listener ) {
                         done = picoos_sdfPutSamples( sdOutFile, bufused / 2, (picoos_int16*) pcm_buffer );
                     } else {
-                        listener->writeData( (unsigned short*)pcm_buffer, bufused/2 );
+                        listener->writeData( (short*)pcm_buffer, bufused/2 );
                     }
 
                     bufused = 0;
@@ -889,7 +889,7 @@ int Pico::process()
         if ( 0 == listener ) {
             done = picoos_sdfPutSamples( sdOutFile, bufused / 2, (picoos_int16*) pcm_buffer );
         } else {
-            listener->writeData( (unsigned short*)pcm_buffer, bufused/2 );
+            listener->writeData( (short*)pcm_buffer, bufused/2 );
         }
     } 
 
@@ -926,7 +926,7 @@ int Pico::fileSize( const char * filename ) {
     return end - beginning;
 }
 
-void Pico::setListener( Listener<unsigned short> * listener ) {
+void Pico::setListener( Listener<short> * listener ) {
     this->listener = listener;
 }
 //////////////////////////////////////////////////////////////////
