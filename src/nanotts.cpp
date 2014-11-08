@@ -93,6 +93,8 @@ private:
     mmfile_t *      mmfile;
 
 public:
+    bool            silence_output;
+
     Nano( const int, const char ** );
     ~Nano();
 
@@ -128,6 +130,8 @@ Nano::Nano( const int i, const char ** v ) : my_argc(i), my_argv(v) {
     pcm_device = 0;
     input_buffer = 0;
     input_size = 0;
+
+    silence_output = false;
 }
 
 Nano::~Nano() {
@@ -186,9 +190,9 @@ void Nano::PrintUsage() {
         { "-f <filename>", "filename to read input from" },
         { "-p <prefix>", "write output to multiple numbered files with prefix" },
         { "-o <filename>", "write output to single file; overrides prefix" },
-        { "-play|-m", "play output on PC's soundcard" },
+        { "--no-play|-m", "do NOT play output on PC's soundcard" },
         { "-c ", "send PCM output to stdout" },
-        { "-files", "set multiple input files" }
+        { "--files", "set multiple input files" }
     };
 
     const char * program = strrchr( my_argv[0], '/' );
@@ -253,7 +257,7 @@ int Nano::check_args() {
             if ( (in_filename = copy_arg( i + 1 )) == 0 )
                 return -1;
         }
-        else if ( strcmp( my_argv[i], "-files" ) == 0 ) {
+        else if ( strcmp( my_argv[i], "--files" ) == 0 ) {
             in_mode = IN_MULTIPLE_FILES;
             // FIXME: get array of char*filename
             if ( (in_filename = copy_arg( i + 1 )) == 0 )
@@ -284,6 +288,11 @@ int Nano::check_args() {
             if ( (voicedir = copy_arg( i + 1 )) == 0 )
                 return -1;
         }
+
+        // OTHER
+        else if ( strcmp( my_argv[i], "-m" ) == 0 || strcmp( my_argv[i], "--no-play" ) == 0 ) {
+            silence_output = true;
+        } 
     }
 
     // post-DEFAULTS
@@ -395,6 +404,9 @@ int Nano::getInput( unsigned char ** data, unsigned int * bytes )
 // 
 void Nano::playOutput() 
 {
+    if ( silence_output )
+        return;
+
     pcmSetup();
 
 /*
@@ -578,8 +590,6 @@ int Pico::setup()
     void *          picoMemArea             = 0;
     pico_Char *     picoTaFileName          = 0;
     pico_Char *     picoSgFileName          = 0;
-//    pico_Char *     picoUtppFileName        = 0;
-//    pico_Char *     picoUtppResourceName    = 0;
     pico_Char *     picoTaResourceName      = 0;
     pico_Char *     picoSgResourceName      = 0;
     const int       PICO_MEM_SIZE           = 2500000;
@@ -639,7 +649,7 @@ int Pico::setup()
 
     /* Get the text analysis resource name.     */
     // FIXME: free?
-    picoTaResourceName  = (pico_Char *) malloc( PICO_MAX_RESOURCE_NAME_SIZE );
+    picoTaResourceName = (pico_Char *) malloc( PICO_MAX_RESOURCE_NAME_SIZE );
     if((ret = pico_getResourceName( picoSystem, picoTaResource, (char *) picoTaResourceName ))) {
         pico_getSystemStatusMessage(picoSystem, ret, outMessage);
         fprintf(stderr, "Cannot get the text analysis resource name (%i): %s\n", ret, outMessage);
@@ -648,7 +658,7 @@ int Pico::setup()
 
     /* Get the signal generation resource name. */
     // FIXME: free?
-    picoSgResourceName  = (pico_Char *) malloc( PICO_MAX_RESOURCE_NAME_SIZE );
+    picoSgResourceName = (pico_Char *) malloc( PICO_MAX_RESOURCE_NAME_SIZE );
     if((ret = pico_getResourceName( picoSystem, picoSgResource, (char *) picoSgResourceName ))) {
         pico_getSystemStatusMessage(picoSystem, ret, outMessage);
         fprintf(stderr, "Cannot get the signal generation resource name (%i): %s\n", ret, outMessage);
@@ -755,17 +765,17 @@ void Pico::sendTextForProcessing( unsigned char * words, int word_len )
 int Pico::process()
 {
     const int       MAX_OUTBUF_SIZE     = 128;
+    const int       PCM_BUFFER_SIZE     = 256;
     pico_Char *     inp                 = 0;
-    int             picoSynthAbort      = 0;
     pico_Int16      bytes_sent, bytes_recv, out_data_type;
     short           outbuf[MAX_OUTBUF_SIZE/2];
     pico_Retstring  outMessage;
-    char            pcm_buffer[8000];
+    char            pcm_buffer[ PCM_BUFFER_SIZE ];
     int             ret, getstatus;
 
     inp = (pico_Char *) local_text;
     unsigned int bufused = 0;
-    memset( pcm_buffer, 0, 8000 );
+    memset( pcm_buffer, 0, PCM_BUFFER_SIZE );
 
     // open output WAVE/PCM for writing
     picoos_bool done = TRUE;
@@ -779,7 +789,7 @@ int Pico::process()
     while (text_remaining > 0) 
     {
         /* Feed the text into the engine.   */
-        if((ret = pico_putTextUtf8( picoEngine, inp, text_remaining, &bytes_sent ))) {
+        if ( (ret = pico_putTextUtf8(picoEngine, inp, text_remaining, &bytes_sent)) ) {
             pico_getSystemStatusMessage(picoSystem, ret, outMessage);
             fprintf(stderr, "Cannot put Text (%i): %s\n", ret, outMessage);
             return -2;
@@ -789,9 +799,6 @@ int Pico::process()
         inp += bytes_sent;
 
         do {
-            if (picoSynthAbort) {
-                return -3;
-            }
 
             /* Retrieve the samples */ 
             getstatus = pico_getData( picoEngine, (void *) outbuf, MAX_OUTBUF_SIZE, &bytes_recv, &out_data_type );
@@ -801,21 +808,23 @@ int Pico::process()
                 return -4;
             }
 
+
             /* copy partial encoding and get more bytes */
             if ( bytes_recv > 0 ) 
             {
-                memcpy( pcm_buffer+bufused, (int8_t *)outbuf, bytes_recv );
-                bufused += bytes_recv;
-            }
 
-            /* or write the buffer to wavefile, and retrieve any leftover decoding bytes */
-            else
-            {
-                done = picoos_sdfPutSamples( sdOutFile, bufused / 2, (picoos_int16*) pcm_buffer );
+fprintf(stderr, "got %d bytes from pico\n", bytes_recv );
 
-                bufused = 0;
+                if ( (bufused + bytes_recv) <= PCM_BUFFER_SIZE ) {
+                    memcpy( pcm_buffer+bufused, (int8_t *)outbuf, bytes_recv );
+                    bufused += bytes_recv;
+                }
 
-                if ( bytes_recv ) {
+                /* or write the buffer to wavefile, and retrieve any leftover decoding bytes */
+                else
+                {
+                    done = picoos_sdfPutSamples( sdOutFile, bufused / 2, (picoos_int16*) pcm_buffer );
+                    bufused = 0;
                     memcpy( pcm_buffer, (int8_t *)outbuf, bytes_recv );
                     bufused += bytes_recv;
                 }
@@ -823,12 +832,8 @@ int Pico::process()
 
         } while (PICO_STEP_BUSY == getstatus);
 
-
         /* This chunk of synthesis is finished; pass the remaining samples. */
-        if (!picoSynthAbort) {
-            done = picoos_sdfPutSamples( sdOutFile, bufused / 2, (picoos_int16*) pcm_buffer );
-        }
-        picoSynthAbort = 0;
+        done = picoos_sdfPutSamples( sdOutFile, bufused / 2, (picoos_int16*) pcm_buffer );
     }
 
 
@@ -883,6 +888,8 @@ int main( int argc, const char ** argv )
         fprintf( stderr, "set voice failed, with: \"%s\n\"", nano->getVoice() );
         goto fast_exit;
     }
+
+    //
     pico->setup();
 
     //
