@@ -18,17 +18,17 @@ Steps:
 - [ ] implement cmdline switches that do:
     - [X] print detailed help (-h, --help)
     - [X] reads WORDS from stdin        (default, if no other input modes detected)
-    - [ ] reads WORDS from cmdline      (-w <words>)
+    - [X] reads WORDS from cmdline      (-w <words>)
     - [X] reads WORDS from file         (-f <filename>) 
     - [X] writes WAVE to file (-p [prefix], -o [outputname](overrides prefix; both add file-extension if needed))
+    - [X] DONT play on device pcm (--no-play|-m)
+    - [X] cleanup printed output
+    - [X] select voice (-v <voice>)
     - --------
     - [ ] limit text input to N lines
     - [ ] catch signals to cancel PCM output cleanly
-    - [ ] cleanup printed output
-    - [ ] DONT play on device pcm (--no-play|-m)
     - [ ] writes PCM-data to stdout (-c)
-    - [ ] select voice (-v <voice>)
-    - [ ] set voice files (lingware) path (-l <path>)
+    - [?] set voice files (lingware) path (-l <path>)
     - [ ] able to read multiple files at once (-files <file1>[file2][file3][..])
     - [ ] works on both Mac and Linux
 - [ ] extra:
@@ -43,3 +43,5 @@ Advanced/overkill wish-list features:
 
 
 a work in progress..
+
+email: _greg AT naughton DOT org_  

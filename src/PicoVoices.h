@@ -23,6 +23,7 @@ public:
     int setVoice( const char * );
     const char * getTaName() ;
     const char * getSgName() ;
+    const char * getVoice() ;
 };
     
 
@@ -91,14 +92,15 @@ int PicoVoices_t::setVoice( int i ) {
 
 int PicoVoices_t::setVoice( const char * voc ) {
     char ** matchable[] = { picoSupportedLang, picoSupportedLangIso3, picoSupportedCountryIso3, 0 };
-    for ( int i = 0; i < 6; i++ ) {
-        char ** p = *matchable;
-        while ( p ) {
-            if ( strcmp( p[i], voc ) == 0 ) {
+    for ( int i = 0 ; i < 6; i++ ) {
+        int j = 0;
+        while ( matchable[j] )
+        {
+            if ( strcmp( (matchable[j])[i], voc ) == 0 ) {
                 voice = i;
                 return i;
             }
-            ++p;
+            ++j;
         }
     }
     return -1;
@@ -110,6 +112,10 @@ const char * PicoVoices_t::getTaName() {
 
 const char * PicoVoices_t::getSgName() {
     return picoInternalSgLingware[ voice ];
+}
+
+const char * PicoVoices_t::getVoice() {
+    return picoInternalLang[ voice ];
 }
 
 #endif /* __PICO_VOICES__ */

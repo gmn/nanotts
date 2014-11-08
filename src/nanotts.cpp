@@ -329,20 +329,22 @@ int Nano::setup_input_output()
         // detect if stdin is coming from a pipe
         if ( ! isatty(fileno(stdin)) ) { // On windows prefix with underscores: _isatty, _fileno
             in_fp = stdin;
-fprintf( stderr, "using stdin\n" );
         } else {
             fprintf( stderr, " **error: reading from stdin\n" );
             return -1;
         }
         break;
     case IN_SINGLE_FILE:
+/*
         if ( (in_fp = fopen( in_filename, "rb" )) == 0 ) {
             fprintf( stderr, " **error: opening file: \"%s\"\n", in_filename );
             return -1;
         }
+*/
         break;
 
     case IN_CMDLINE_ARG:
+        break;
     case IN_MULTIPLE_FILES:
     default:
         __NOT_IMPL__
@@ -374,24 +376,25 @@ int Nano::getInput( unsigned char ** data, unsigned int * bytes )
 {
     switch( in_mode ) {
     case IN_STDIN:
-
         input_buffer = new unsigned char[ 1000000 ];
         memset( input_buffer, 0, 1000000 );
-
         input_size = fread( input_buffer, 1, 1000000, stdin );
- fprintf( stderr, "read: %u bytes from stdin\n", input_size );
+ 
         *data = input_buffer;
-        *bytes = input_size;
+        *bytes = input_size + 1;
+        fprintf( stderr, "read: %u bytes from stdin\n", input_size );
         break;
     case IN_SINGLE_FILE:
-        /*
-        input_buffer = memorymap_file_open( in_filename, &input_size, in_fp );
-        *data = input_buffer;
-        *bytes = input_size;
-        */
         mmfile = new mmfile_t( in_filename );
+
         *data = mmfile->data;
-        *bytes = mmfile->size;
+        *bytes = mmfile->size + 1;
+        fprintf( stderr, "read: %u bytes from file:\"%s\"\n", mmfile->size, in_filename );
+        break;
+    case IN_CMDLINE_ARG:
+        *data = (unsigned char *)words;
+        *bytes = strlen(words) + 1;
+        fprintf( stderr, "read: %u bytes from command line\n", *bytes );
         break;
     default:
         fprintf( stderr, "unknown input\n" );
@@ -462,7 +465,7 @@ int Nano::pcmSetup()
 void Nano::pcmPlay( char * buffer, unsigned int bytes ) 
 {
     ao_play( pcm_device, buffer, bytes );
-    fprintf( stderr, "finished playing wav\n" );
+    fprintf( stderr, "finished playback\n" );
 }
 
 void Nano::pcmShutdown() {
@@ -812,9 +815,6 @@ int Pico::process()
             /* copy partial encoding and get more bytes */
             if ( bytes_recv > 0 ) 
             {
-
-fprintf(stderr, "got %d bytes from pico\n", bytes_recv );
-
                 if ( (bufused + bytes_recv) <= PCM_BUFFER_SIZE ) {
                     memcpy( pcm_buffer+bufused, (int8_t *)outbuf, bytes_recv );
                     bufused += bytes_recv;
@@ -848,7 +848,9 @@ fprintf(stderr, "got %d bytes from pico\n", bytes_recv );
 }
 
 int Pico::setVoice( const char * v ) {
-    return voices.setVoice( v ) ;
+    int r = voices.setVoice( v ) ;
+    fprintf( stderr, "using lang: %s\n", voices.getVoice() );
+    return r;
 }
 
 //////////////////////////////////////////////////////////////////
@@ -897,6 +899,9 @@ int main( int argc, const char ** argv )
 
     //
     pico->process();
+
+    // 
+    pico->cleanup();
 
     //
     nano->playOutput();
