@@ -2,6 +2,7 @@ PROGRAM = nanotts
 TARGETS = svoxpico/.libs/libttspico.a
 #OPT_FLAG = -O2
 OPT_FLAG = 
+SHELL := /bin/bash
 
 $(PROGRAM): $(TARGETS) 
 pico: $(TARGETS)
@@ -16,7 +17,8 @@ nanotts:
 	g++ -L./svoxpico/.libs mmfile.o nanotts.o svoxpico/.libs/libttspico.a -g ${OPT_FLAG} -o nanotts -lao -ldl -lm
 
 clean:
-	for i in mmfile.o nanotts.o nanotts pico2wave pico2wave.o; do echo $i; if [ -e $i ]; then rm $i; fi; done 
+	for file in mmfile.o nanotts.o nanotts pico2wave pico2wave.o ; do if [ -f $${file} ]; then rm $${file}; echo rm $${file}; fi; done
+	cd svoxpico; make clean ; ./clean.sh
 
 pico:
 	gcc -I. -I./svoxpico -Wall -g ${OPT_FLAG} -c -o pico2wave.o src/pico2wave.c
