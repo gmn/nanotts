@@ -43,6 +43,9 @@ extern "C" {
 
 class Nano;
 
+#define PICO_DEFAULT_SPEED 0.88f
+#define PICO_DEFAULT_PITCH 1.05f
+#define PICO_DEFAULT_VOLUME 1.00f
 
 /*
 ================================================
@@ -138,6 +141,13 @@ private:
     Listener<short> stdout_processor;
     void write_short_to_stdout( short *, unsigned int );
 
+    float           speed;
+    float           pitch;
+    float           volume;
+
+    char[90]        boilerplate;
+    char[30]        end_boilerplate;
+
 public:
     bool            silence_output;
 
@@ -178,6 +188,13 @@ Nano::Nano( const int i, const char ** v ) : my_argc(i), my_argv(v) {
 
     silence_output = false;
     stdout_processor.setCallback( &Nano::write_short_to_stdout, this );
+
+    speed = PICO_DEFAULT_SPEED;
+    pitch = PICO_DEFAULT_PITCH;
+    volume = PICO_DEFAULT_VOLUME;
+
+    sprintf( boilerplate, "<speed level=\"%f\"><pitch level=\"%f\"><volume level=\"%f\">", speed, pitch, volume );
+    sprintf( end_boilerplate, "</volume></pitch></speed>" );
 }
 
 Nano::~Nano() {
@@ -253,6 +270,9 @@ void Nano::PrintUsage() {
         { "-o <filename>", "write output to single file; overrides prefix" },
         { "--no-play|-m", "do NOT play output on PC's soundcard" },
         { "-c ", "send PCM output to stdout" },
+        { "--speed <0.2 - 5.0>", "change voice speed: default 0.88" },
+        { "--pitch <0.5 - 2.0>", "change voice pitch: default 1.05" },
+        { "--volume <0.0 - 5.0>", "change voice volume (>1.0 may result in degraded quality). default 1.0" },
 //        { "--files", "set multiple input files" },
         { " ", " " },
         { "Examples: ", " " },
@@ -347,12 +367,19 @@ int Nano::check_args() {
         else if ( strcmp( my_argv[i], "-l" ) == 0 ) {
             if ( (voicedir = copy_arg( i + 1 )) == 0 )
                 return -1;
+            fprintf( stderr, "Lingware directory: %s\n", voicedir );
         }
 
         // OTHER
         else if ( strcmp( my_argv[i], "-m" ) == 0 || strcmp( my_argv[i], "--no-play" ) == 0 ) {
             silence_output = true;
         } 
+        else if ( strcmp( my_argv[i], "--speed" ) == 0 ) {
+        }
+        else if ( strcmp( my_argv[i], "--pitch" ) == 0 ) {
+        }
+        else if ( strcmp( my_argv[i], "--volume" ) == 0 ) {
+        }
     }
 
     // post-DEFAULTS
@@ -395,12 +422,7 @@ int Nano::setup_input_output()
         }
         break;
     case IN_SINGLE_FILE:
-/*
-        if ( (in_fp = fopen( in_filename, "rb" )) == 0 ) {
-            fprintf( stderr, " **error: opening file: \"%s\"\n", in_filename );
-            return -1;
-        }
-*/
+        // mmap elsewhere
         break;
 
     case IN_CMDLINE_ARG:
@@ -437,21 +459,19 @@ int Nano::getInput( unsigned char ** data, unsigned int * bytes )
         input_buffer = new unsigned char[ 1000000 ];
         memset( input_buffer, 0, 1000000 );
         input_size = fread( input_buffer, 1, 1000000, stdin );
- 
         *data = input_buffer;
-        *bytes = input_size + 1;
+        *bytes = input_size + 1;    /* pico expects 1 for terminating '\0' */
         fprintf( stderr, "read: %u bytes from stdin\n", input_size );
         break;
     case IN_SINGLE_FILE:
         mmfile = new mmfile_t( in_filename );
-
         *data = mmfile->data;
-        *bytes = mmfile->size + 1;
-        fprintf( stderr, "read: %u bytes from file:\"%s\"\n", mmfile->size, in_filename );
+        *bytes = mmfile->size + 1;  /* 1 additional for terminating '\0' */
+        fprintf( stderr, "read: %u bytes from \"%s\"\n", mmfile->size, in_filename );
         break;
     case IN_CMDLINE_ARG:
         *data = (unsigned char *)words;
-        *bytes = strlen(words) + 1;
+        *bytes = strlen(words) + 1; /* 1 additional for terminating '\0' */
         fprintf( stderr, "read: %u bytes from command line\n", *bytes );
         break;
     default:
@@ -579,7 +599,7 @@ public:
     int setup() ;
     void cleanup() ;
     void sendTextForProcessing( unsigned char *, long long int ) ;
-    int process() ;
+    int process( const char * =0, unsigned int =0, const char * =0, unsigned int =0 ) ;
 
     int setVoice( const char * );
     void setOutFilename( const char * fn ) { out_filename = const_cast<char*>(fn); }
@@ -799,7 +819,7 @@ void Pico::sendTextForProcessing( unsigned char * words, long long int word_len 
     total_text_length   = word_len;
 }
 
-int Pico::process()
+int Pico::process( const char * beginpad, unsigned int blen, const char * endpad, unsigned int elen )
 {
     const int       MAX_OUTBUF_SIZE     = 128;
     const int       PCM_BUFFER_SIZE     = 256;
@@ -809,9 +829,22 @@ int Pico::process()
     pico_Retstring  outMessage;
     char            pcm_buffer[ PCM_BUFFER_SIZE ];
     int             ret, getstatus;
-    picoos_bool     done = TRUE;
+    picoos_bool     done                = TRUE;
+    bool            start_pad           = false;
+    bool            end_pad             = false;
 
-    inp = (pico_Char *) local_text;
+    // pads are optional, but can be provided to set pico-modifiers
+    if ( beginpad != 0 ) {
+        inp = (pico_Char *) beginpad;
+        start_pad = true;
+        text_remaining = blen;
+    } else {
+        inp = (pico_Char *) local_text;
+    }
+    if ( endpad != 0 ) {
+        end_pad = true;
+    }
+
     unsigned int bufused = 0;
     memset( pcm_buffer, 0, PCM_BUFFER_SIZE );
 
@@ -832,12 +865,31 @@ int Pico::process()
         //−32,768 to 32,767.
         if (text_remaining <= 0) 
         {
-            if ( text_length <= 0 )
-                break;
+            // text_remaining run-out; end pre-pad text
+            if ( start_pad ) { 
+                start_pad = false;
 
-            int increment = text_length >= 32767 ? 32767 : text_length;
-            text_length -= increment;
-            text_remaining = increment;
+                // start normal text
+                inp = (pico_Char *) local_text;
+            }
+
+            // text ran out
+            else if ( text_length <= 0 ) {
+                // tack end_pad on the end
+                else if ( end_pad ) {
+                    end_pad = false;
+                    inp = (pico_Char *) endpad;            
+                    text_remaining = elen;
+                } else {
+                    break;
+                }
+            }
+
+            else {
+                int increment = text_length >= 32767 ? 32767 : text_length;
+                text_length -= increment;
+                text_remaining = increment;
+            }
         }
 
         /* Feed the text into the engine.   */
@@ -975,7 +1027,7 @@ int main( int argc, const char ** argv )
     pico->sendTextForProcessing( words, length ); 
 
     //
-    pico->process();
+    pico->process( nano->getPad() );
 
     // 
     pico->cleanup();
