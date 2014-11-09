@@ -25,18 +25,17 @@ Steps:
     - [X] cleanup printed output
     - [X] select voice (-v <voice>)
     - [X] writes PCM-data to stdout (-c)
-    - --------
+    - [X] set voice files (lingware) path (-l <path>)
     - [ ] progress meter to stderr 
-    - [ ] set speed
-    - [ ] set volume
-    - [ ] set pitch
+    - [X] set speed
+    - [X] set volume
+    - [X] set pitch
     - [ ] -q flag to silence output to {stdout, stderr}
-    - [ ] limit text input to N lines
-    - [ ] catch signals to cancel PCM output cleanly
-    - [?] set voice files (lingware) path (-l <path>)
-    - [ ] able to read multiple files at once (-files <file1>[file2][file3][..])
+    - [ ] catch signals to cancel PCM playback/output cleanly
     - [ ] works on both Mac and Linux
 - [ ] extra:
+    - [ ] able to read multiple files at once (-files <file1>[file2][file3][..])
+    - [ ] limit text input to N lines
     - [ ] slow-down/speed-up speaking rate of voice
     - [ ] bit-rate, frequency, channel, parms for .wav 
     - [ ] mp3 output 
@@ -49,8 +48,7 @@ Steps:
 echo "eenie meany miny moh" | ./nanotts -c | lame -r -s 16 --bitwidth 16 --signed --little-endian -m m -b 32 -h - out.mp3
 ```
 
-I know what you're thinking -- it's a mess. Because it's raw PCM, you have to tell lame exactly what format to expect.
-But hey, at least right now it's automatable! 
+I know what you're thinking--mp3 is a mess. And you would be right to think that. Basically, because it's raw PCM, you have to tell lame exactly what format to expect. But hey, at least right now mp3 is automatable! 
 
 
 email: _greg AT naughton DOT org_  

@@ -63,11 +63,13 @@ class Listener {
 public:
     Listener() : data(0), read_p(0), consume(0), nano_class(0) {
     }
+    Listener(Nano *n) : data(0), read_p(0), consume(0), nano_class(n) {
+    }
     virtual ~Listener() {
     }
 
     void writeData( type * data, unsigned int byte_size );
-    void setCallback( void (Nano::*con_f)( short *, unsigned int ), Nano* ) ;
+    void setCallback( void (Nano::*con_f)( short *, unsigned int ), Nano* =0 ) ;
 };
 
 template <typename type>
@@ -81,10 +83,98 @@ void Listener<type>::writeData( type * data, unsigned int byte_size ) {
 template <typename type>
 void Listener<type>::setCallback( void (Nano::*con_f)( short *, unsigned int ), Nano* nano_class ) {
     this->consume = con_f;
-    this->nano_class = nano_class;
+    if ( nano_class )
+        this->nano_class = nano_class;
 }
 //////////////////////////////////////////////////////////////////
 
+
+/*
+================================================
+Boilerplate
+
+adds padding text around input to set various parameters in pico
+================================================
+*/
+class Boilerplate {
+    char plate_begin[100];
+    char plate_end[50];
+    
+    float speed;
+    float pitch;
+    float volume;
+
+    void setOne( const char * verb, float value ) {
+        char buf[100];
+        
+        struct pads_t { 
+            const char * name;
+            const char * ofmt;
+            const char * cfmt;
+            float * val;
+        } pads[] = {
+            {"speed",   "<speed level=\"%d\">",     "</speed>",     &speed},
+            {"pitch",   "<pitch level=\"%d\">",     "</pitch>",     &pitch},
+            {"volume",  "<volume level=\"%d\">",    "</volume>",    &volume}
+        };
+
+        // find the parm and set it
+        for ( int i = 0; i < 3; i++ ) {
+            if ( strcmp( pads[i].name, verb ) == 0 ) {
+                *(pads[i].val) = value;
+                break;
+            }
+        }
+
+        // rebuild the plates
+        memset( plate_begin, 0, 100 );
+        memset( plate_end, 0, 50 );
+        for ( int i = 0; i < 3; i++ ) {
+            if ( *(pads[i].val) != -1 ) {
+                // begin plate
+                int ivalue = ceilf( *(pads[i].val) * 100.0f );
+                sprintf( buf, pads[i].ofmt, ivalue );
+                strcat( plate_begin, buf );
+                // end plate := reverse order to match tag order
+                strcpy( buf, plate_end );
+                sprintf( plate_end, "%s%s", pads[i].cfmt, buf ); // </volume></pitch></speed>
+            }
+        }
+    }
+
+public:
+    Boilerplate() { 
+        speed   = -1.0f;
+        pitch   = -1.0f;
+        volume  = -1.0f;
+
+        memset( plate_begin, 0, 100 );
+        memset( plate_end, 0, 50 );
+    }
+
+    Boilerplate( float s, float p, float v ) {
+        setSpeed( s );
+        setPitch( p );
+        setVolume( v );
+    }
+
+    bool isChanged() {
+        return !((speed == -1.0f) && (pitch == -1.0f) && (volume == -1.0f));
+    }
+
+    char * getOpener(unsigned int * l) { *l = strlen(plate_begin); return plate_begin; }
+    char * getCloser(unsigned int * l) { *l = strlen(plate_end); return plate_end; }
+
+    void setSpeed( float f ) {
+        setOne( "speed", f );
+    }
+    void setPitch( float f ) {
+        setOne( "pitch", f );
+    }
+    void setVolume( float f ) {
+        setOne( "volume", f );
+    }
+};
 
 
 /*
@@ -94,7 +184,6 @@ Nano
 Singleton class to handle workings of this program
 ================================================
 */
-
 class Nano 
 {
 private:
@@ -111,45 +200,40 @@ private:
         OUT_MULTIPLE_FILES
     };
 
-    inputMode_t     in_mode;
-    outputMode_t    out_mode;
+    inputMode_t         in_mode;
+    outputMode_t        out_mode;
 
-    const int       my_argc;
-    const char **   my_argv;
-    const char *    exename;
+    const int           my_argc;
+    const char **       my_argv;
+    const char *        exename;
 
-    char *          voice;
-    char *          voicedir;
-    char *          prefix;
-    char *          out_filename;
-    char *          in_filename;
-    char *          words;
-    FILE *          in_fp;
-    FILE *          out_fp;
+    char *              voice;
+    char *              voicedir;
+    char *              prefix;
+    char *              out_filename;
+    char *              in_filename;
+    char *              words;
+    FILE *              in_fp;
+    FILE *              out_fp;
 
-    char *          copy_arg( int );
+    char *              copy_arg( int );
     
     ao_device *         pcm_device;
     ao_sample_format    pcm_format;
     int                 pcm_driver;
 
-    unsigned char * input_buffer;
-    unsigned int    input_size;
+    unsigned char *     input_buffer;
+    unsigned int        input_size;
 
-    mmfile_t *      mmfile;
+    mmfile_t *          mmfile;
 
-    Listener<short> stdout_processor;
+    Listener<short>     stdout_processor;
     void write_short_to_stdout( short *, unsigned int );
 
-    float           speed;
-    float           pitch;
-    float           volume;
-
-    char[90]        boilerplate;
-    char[30]        end_boilerplate;
+    Boilerplate         modifiers;
 
 public:
-    bool            silence_output;
+    bool                silence_output;
 
     Nano( const int, const char ** );
     ~Nano();
@@ -171,9 +255,11 @@ public:
     const char * outFilename() const { return out_filename; }
 
     Listener<short> * getListener() ; 
+
+    Boilerplate * getModifiers() ;
 };
 
-Nano::Nano( const int i, const char ** v ) : my_argc(i), my_argv(v) {
+Nano::Nano( const int i, const char ** v ) : my_argc(i), my_argv(v), stdout_processor(this) {
     voice = 0;
     voicedir = 0;
     prefix = 0;
@@ -187,14 +273,13 @@ Nano::Nano( const int i, const char ** v ) : my_argc(i), my_argv(v) {
     input_size = 0;
 
     silence_output = false;
-    stdout_processor.setCallback( &Nano::write_short_to_stdout, this );
+    stdout_processor.setCallback( &Nano::write_short_to_stdout );
 
+/*
     speed = PICO_DEFAULT_SPEED;
     pitch = PICO_DEFAULT_PITCH;
     volume = PICO_DEFAULT_VOLUME;
-
-    sprintf( boilerplate, "<speed level=\"%f\"><pitch level=\"%f\"><volume level=\"%f\">", speed, pitch, volume );
-    sprintf( end_boilerplate, "</volume></pitch></speed>" );
+*/
 }
 
 Nano::~Nano() {
@@ -270,9 +355,9 @@ void Nano::PrintUsage() {
         { "-o <filename>", "write output to single file; overrides prefix" },
         { "--no-play|-m", "do NOT play output on PC's soundcard" },
         { "-c ", "send PCM output to stdout" },
-        { "--speed <0.2 - 5.0>", "change voice speed: default 0.88" },
-        { "--pitch <0.5 - 2.0>", "change voice pitch: default 1.05" },
-        { "--volume <0.0 - 5.0>", "change voice volume (>1.0 may result in degraded quality). default 1.0" },
+        { "--speed <0.2-5.0>", "change voice speed" },
+        { "--pitch <0.5-2.0>", "change voice pitch" },
+        { "--volume <0.0-5.0>", "change voice volume (>1.0 may result in degraded quality)" },
 //        { "--files", "set multiple input files" },
         { " ", " " },
         { "Examples: ", " " },
@@ -284,7 +369,7 @@ void Nano::PrintUsage() {
     unsigned long long int size = *(&help_lines + 1) - help_lines;
 
     for ( unsigned int i = 0; i < size; i++ ) {
-        printf( " %-14s   %s\n", help_lines[i].arg, help_lines[i].desc );
+        printf( " %-20s%s\n", help_lines[i].arg, help_lines[i].desc );
     }
 }
 
@@ -375,10 +460,19 @@ int Nano::check_args() {
             silence_output = true;
         } 
         else if ( strcmp( my_argv[i], "--speed" ) == 0 ) {
+            if ( i + 1 >= my_argc )
+                return -1;
+            modifiers.setSpeed( strtof(my_argv[i+1], 0) );
         }
         else if ( strcmp( my_argv[i], "--pitch" ) == 0 ) {
+            if ( i + 1 >= my_argc )
+                return -1;
+            modifiers.setPitch( strtof(my_argv[i+1], 0) );
         }
         else if ( strcmp( my_argv[i], "--volume" ) == 0 ) {
+            if ( i + 1 >= my_argc )
+                return -1;
+            modifiers.setVolume( strtof(my_argv[i+1], 0) );
         }
     }
 
@@ -561,6 +655,12 @@ Listener<short> * Nano::getListener() {
         return 0;
     return &stdout_processor; 
 }
+
+Boilerplate * Nano::getModifiers() {
+    if ( modifiers.isChanged() )
+        return &modifiers;
+    return 0;
+}
 //////////////////////////////////////////////////////////////////
 
 
@@ -575,37 +675,40 @@ class to encapsulate the workings of the SVox PicoTTS System
 */
 class Pico {
 private:
-    PicoVoices_t    voices;
+    PicoVoices_t        voices;
 
-    pico_System     picoSystem;
-    pico_Resource   picoTaResource;
-    pico_Resource   picoSgResource;
-    pico_Engine     picoEngine;
-    picoos_SDFile   sdOutFile;
-    char *          out_filename;
+    pico_System         picoSystem;
+    pico_Resource       picoTaResource;
+    pico_Resource       picoSgResource;
+    pico_Engine         picoEngine;
+    picoos_SDFile       sdOutFile;
+    char *              out_filename;
 
-    pico_Char *     local_text;
-    pico_Int16      text_remaining;
-    long long int   total_text_length;
-    char *          picoLingwarePath;
+    pico_Char *         local_text;
+    pico_Int16          text_remaining;
+    long long int       total_text_length;
+    char *              picoLingwarePath;
 
-    char            picoVoiceName[10];
-    Listener<short> * listener;
+    char                picoVoiceName[10];
+    Listener<short> *   listener;
+    Boilerplate *       modifiers;
+
 public:
     Pico() ;
     ~Pico() ;
 
     void setPath( const char * path =0 );
-    int setup() ;
+    int setupInternal() ;
     void cleanup() ;
     void sendTextForProcessing( unsigned char *, long long int ) ;
-    int process( const char * =0, unsigned int =0, const char * =0, unsigned int =0 ) ;
+    int process();
 
     int setVoice( const char * );
     void setOutFilename( const char * fn ) { out_filename = const_cast<char*>(fn); }
 
     int fileSize( const char * filename ) ;
     void setListener( Listener<short> * );
+    void addModifiers( Boilerplate * );
 };
 
 
@@ -623,6 +726,7 @@ Pico::Pico() {
     total_text_length   = 0;
     text_remaining      = 0;
     listener            = 0;
+    modifiers           = 0;
 }
 
 Pico::~Pico() {
@@ -641,7 +745,7 @@ void Pico::setPath( const char * path ) {
     strcpy( picoLingwarePath, path );
 }
 
-int Pico::setup() 
+int Pico::setupInternal() 
 {
     /* adaptation layer variables */
     void *          picoMemArea             = 0;
@@ -819,7 +923,7 @@ void Pico::sendTextForProcessing( unsigned char * words, long long int word_len 
     total_text_length   = word_len;
 }
 
-int Pico::process( const char * beginpad, unsigned int blen, const char * endpad, unsigned int elen )
+int Pico::process()
 {
     const int       MAX_OUTBUF_SIZE     = 128;
     const int       PCM_BUFFER_SIZE     = 256;
@@ -830,19 +934,21 @@ int Pico::process( const char * beginpad, unsigned int blen, const char * endpad
     char            pcm_buffer[ PCM_BUFFER_SIZE ];
     int             ret, getstatus;
     picoos_bool     done                = TRUE;
-    bool            start_pad           = false;
-    bool            end_pad             = false;
+
+    bool            do_startpad         = false;
+    bool            do_endpad           = false;
 
     // pads are optional, but can be provided to set pico-modifiers
-    if ( beginpad != 0 ) {
-        inp = (pico_Char *) beginpad;
-        start_pad = true;
-        text_remaining = blen;
+    if ( modifiers ) {
+        do_startpad = true;
+        do_endpad = true;
+        unsigned int len;
+        inp = (pico_Char *) modifiers->getOpener( &len );
+        text_remaining = len;
+
+        fprintf( stderr, "pad: \"%s %s\"\n", modifiers->getOpener(&len), modifiers->getCloser(&len) );
     } else {
         inp = (pico_Char *) local_text;
-    }
-    if ( endpad != 0 ) {
-        end_pad = true;
     }
 
     unsigned int bufused = 0;
@@ -866,25 +972,27 @@ int Pico::process( const char * beginpad, unsigned int blen, const char * endpad
         if (text_remaining <= 0) 
         {
             // text_remaining run-out; end pre-pad text
-            if ( start_pad ) { 
-                start_pad = false;
-
+            if ( do_startpad ) { 
+                do_startpad = false;
                 // start normal text
                 inp = (pico_Char *) local_text;
+                int increment = text_length >= 32767 ? 32767 : text_length;
+                text_length -= increment;
+                text_remaining = increment;
             }
-
-            // text ran out
+            // main text ran out
             else if ( text_length <= 0 ) {
                 // tack end_pad on the end
-                else if ( end_pad ) {
-                    end_pad = false;
-                    inp = (pico_Char *) endpad;            
-                    text_remaining = elen;
+                if ( do_endpad ) {
+                    do_endpad = false;
+                    unsigned int len;
+                    inp = (pico_Char *) modifiers->getCloser( &len );
+                    text_remaining = len;
                 } else {
-                    break;
+                    break; /* done */
                 }
             }
-
+            // continue feed main text
             else {
                 int increment = text_length >= 32767 ? 32767 : text_length;
                 text_length -= increment;
@@ -981,6 +1089,10 @@ int Pico::fileSize( const char * filename ) {
 void Pico::setListener( Listener<short> * listener ) {
     this->listener = listener;
 }
+
+void Pico::addModifiers( Boilerplate * modifiers ) {
+    this->modifiers = modifiers;
+}
 //////////////////////////////////////////////////////////////////
 
 
@@ -1019,15 +1131,16 @@ int main( int argc, const char ** argv )
         goto fast_exit;
     }
     pico->setListener( nano->getListener() );
+    pico->addModifiers( nano->getModifiers() );
 
     //
-    pico->setup();
+    pico->setupInternal();
 
     //
     pico->sendTextForProcessing( words, length ); 
 
     //
-    pico->process( nano->getPad() );
+    pico->process();
 
     // 
     pico->cleanup();
