@@ -24,23 +24,25 @@ Steps:
     - [X] DONT play on device pcm (--no-play|-m)
     - [X] cleanup printed output
     - [X] select voice (-v <voice>)
+    - [X] writes PCM-data to stdout (-c)
     - --------
+    - [ ] progress meter to stderr 
+    - [ ] set speed
+    - [ ] set volume
+    - [ ] set pitch
     - [ ] -q flag to silence output to {stdout, stderr}
     - [ ] limit text input to N lines
     - [ ] catch signals to cancel PCM output cleanly
-    - [X] writes PCM-data to stdout (-c)
     - [?] set voice files (lingware) path (-l <path>)
     - [ ] able to read multiple files at once (-files <file1>[file2][file3][..])
     - [ ] works on both Mac and Linux
 - [ ] extra:
     - [ ] slow-down/speed-up speaking rate of voice
     - [ ] bit-rate, frequency, channel, parms for .wav 
-
-Advanced/overkill wish-list features:
-- [ ] mp3 output 
-- [ ] store base settings in $HOME/.config type file, so you dont have to type language prefs every time
-- [ ] advanced feature to carve up large text-file into set of auto-named .mp3
-- [ ] search and replace feature, useful for replacing certain problem characters, such as '-' (pico says "hyphen") that can ruin the flow of a book, so replace '-' with ',' which pico interprets instead as a pause.
+    - [ ] mp3 output 
+    - [ ] store base settings in $HOME/.config type file, so you dont have to type language prefs every time
+    - [ ] advanced feature to carve up large text-file into set of auto-named .mp3
+    - [ ] search & replace, useful for replacing certain problem characters, such as '-' (pico says "hyphen") that can ruin the flow of a book, so replace '-' with ',' which pico interprets instead as a pause.
 
 ## MP3 PIPE example
 ```
