@@ -187,7 +187,7 @@ public:
         for ( unsigned int i = 0; i < padslen; i++ ) {
             if ( *(pads[i].val) != -1 ) {
                 pads_t * p = &pads[i];
-                sprintf( tmp, "%s: %f\n", p->name, *p->val );
+                sprintf( tmp, "%s: %.2f\n", p->name, *p->val );
                 strcat( buf, tmp );
             }
         }
@@ -351,45 +351,51 @@ void Nano::PrintUsage() {
     program = !program ? my_argv[0] : program + 1;
     this->exename = program;
 
-    printf( "usage: %s [options]\n", exename );
+    printf( "usage: %s [options]\n\n", exename );
 
     char line1[ 80 ];
     char line2[ 80 ];
     char line3[ 80 ];
     memset( line1, 0, 80 );
     memset( line2, 0, 80 );
-    sprintf( line1, "  %s -f <filename> --no-play -o file1.wav", exename );
+    sprintf( line1, "  %s -f <filename> -o file1.wav --no-play", exename );
     sprintf( line2, "  echo \"Mary had a little lamb\" | %s", exename );
-    sprintf( line3, "  %s -w \"Once upon a midnight dreary\" -v en-US", exename );
+    sprintf( line3, "  %s -w \"Once upon a midnight dreary\" -v en-US --speed 0.6", exename );
 
     struct help {
         const char *arg;
         const char *desc;
     } help_lines[] = {
-        { "-h, --help", "displays this" },
-        { "-v <voice>", "select voice. Default: en-GB" },
-        { "-l <directory>", "Lingware voices directory. Default: \"./lang\"" },
-        { "-w <words>", "words. must be correctly quoted" },
-        { "-f <filename>", "filename to read input from" },
-//        { "-p <prefix>", "write output to multiple numbered files with prefix" },
-        { "-o <filename>", "write output to single file; overrides prefix" },
-        { "--no-play|-m", "do NOT play output on PC's soundcard" },
-        { "-c ", "send PCM output to stdout" },
-        { "--speed <0.2-5.0>", "change voice speed" },
-        { "--pitch <0.5-2.0>", "change voice pitch" },
-        { "--volume <0.0-5.0>", "change voice volume (>1.0 may result in degraded quality)" },
-//        { "--files", "set multiple input files" },
+        { "  -h, --help", "displays this" },
+        { "  -v <voice>", "select voice. Default: en-GB" },
+        { "  -l <directory>", "Lingware voices directory. (default: \"./lang\")" },
+        { "  -w <words>", "words. must be correctly quoted" },
+        { "  -f <filename>", "filename to read input from" },
+//        { "  -p <prefix>", "write output to multiple numbered files with prefix" },
+        { "  -o <filename>", "write output to single file; overrides prefix" },
+        { "  --no-play|-m", "do NOT play output on PC's soundcard" },
+        { "  -c ", "send PCM output to stdout" },
+        { "  --speed <0.2-5.0>", "change voice speed" },
+        { "  --pitch <0.5-2.0>", "change voice pitch" },
+        { "  --volume <0.0-5.0>", "change voice volume (>1.0 may result in degraded quality)" },
+//        { "  --files", "set multiple input files" },
+        { " ", " " },
+        { "Possible Voices: ", " " },
+        { " ", " " },
+        { "  en-US, en-GB, de-DE, es-ES, fr-FR, it-IT", " " },
         { " ", " " },
         { "Examples: ", " " },
+        { " ", " " },
         { line1, " " },
         { line2, " " },
         { line3, " " },
+        { " ", " " },
     };
 
     unsigned long long int size = *(&help_lines + 1) - help_lines;
 
     for ( unsigned int i = 0; i < size; i++ ) {
-        printf( " %-20s%s\n", help_lines[i].arg, help_lines[i].desc );
+        printf( "%-22s%s\n", help_lines[i].arg, help_lines[i].desc );
     }
 }
 
