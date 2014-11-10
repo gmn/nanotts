@@ -89,6 +89,12 @@ void Listener<type>::setCallback( void (Nano::*con_f)( short *, unsigned int ), 
 //////////////////////////////////////////////////////////////////
 
 
+struct pads_t { 
+    const char * name;
+    const char * ofmt;
+    const char * cfmt;
+    float * val;
+}; 
 /*
 ================================================
 Boilerplate
@@ -104,22 +110,13 @@ class Boilerplate {
     float pitch;
     float volume;
 
+    const unsigned int padslen;
+
     void setOne( const char * verb, float value ) {
         char buf[100];
-        
-        struct pads_t { 
-            const char * name;
-            const char * ofmt;
-            const char * cfmt;
-            float * val;
-        } pads[] = {
-            {"speed",   "<speed level=\"%d\">",     "</speed>",     &speed},
-            {"pitch",   "<pitch level=\"%d\">",     "</pitch>",     &pitch},
-            {"volume",  "<volume level=\"%d\">",    "</volume>",    &volume}
-        };
 
         // find the parm and set it
-        for ( int i = 0; i < 3; i++ ) {
+        for ( unsigned int i = 0; i < padslen; i++ ) {
             if ( strcmp( pads[i].name, verb ) == 0 ) {
                 *(pads[i].val) = value;
                 break;
@@ -129,7 +126,7 @@ class Boilerplate {
         // rebuild the plates
         memset( plate_begin, 0, 100 );
         memset( plate_end, 0, 50 );
-        for ( int i = 0; i < 3; i++ ) {
+        for ( unsigned int i = 0; i < padslen; i++ ) {
             if ( *(pads[i].val) != -1 ) {
                 // begin plate
                 int ivalue = ceilf( *(pads[i].val) * 100.0f );
@@ -137,22 +134,29 @@ class Boilerplate {
                 strcat( plate_begin, buf );
                 // end plate := reverse order to match tag order
                 strcpy( buf, plate_end );
-                sprintf( plate_end, "%s%s", pads[i].cfmt, buf ); // </volume></pitch></speed>
+                sprintf( plate_end, "%s%s", pads[i].cfmt, buf ); 
+                // </volume></pitch></speed>
             }
         }
     }
 
 public:
-    Boilerplate() { 
+    static pads_t pads[];
+
+    Boilerplate() : padslen(3) { 
         speed   = -1.0f;
         pitch   = -1.0f;
         volume  = -1.0f;
 
         memset( plate_begin, 0, 100 );
         memset( plate_end, 0, 50 );
+
+        pads[0].val = &speed;
+        pads[1].val = &pitch;
+        pads[2].val = &volume;
     }
 
-    Boilerplate( float s, float p, float v ) {
+    Boilerplate( float s, float p, float v ) : padslen(3) {
         setSpeed( s );
         setPitch( p );
         setVolume( v );
@@ -174,7 +178,29 @@ public:
     void setVolume( float f ) {
         setOne( "volume", f );
     }
+
+    const char * getStatusMessage() {
+        static char buf[100];
+        memset(buf, 0, 100);
+        char tmp[40];
+
+        for ( unsigned int i = 0; i < padslen; i++ ) {
+            if ( *(pads[i].val) != -1 ) {
+                pads_t * p = &pads[i];
+                sprintf( tmp, "%s: %f\n", p->name, *p->val );
+                strcat( buf, tmp );
+            }
+        }
+        return buf;
+    }
 };
+
+pads_t Boilerplate::pads[] = {
+    {"speed",   "<speed level=\"%d\">",     "</speed>",     0},
+    {"pitch",   "<pitch level=\"%d\">",     "</pitch>",     0},
+    {"volume",  "<volume level=\"%d\">",    "</volume>",    0}
+};
+
 
 
 /*
@@ -274,12 +300,6 @@ Nano::Nano( const int i, const char ** v ) : my_argc(i), my_argv(v), stdout_proc
 
     silence_output = false;
     stdout_processor.setCallback( &Nano::write_short_to_stdout );
-
-/*
-    speed = PICO_DEFAULT_SPEED;
-    pitch = PICO_DEFAULT_PITCH;
-    volume = PICO_DEFAULT_VOLUME;
-*/
 }
 
 Nano::~Nano() {
@@ -945,8 +965,7 @@ int Pico::process()
         unsigned int len;
         inp = (pico_Char *) modifiers->getOpener( &len );
         text_remaining = len;
-
-        fprintf( stderr, "pad: \"%s %s\"\n", modifiers->getOpener(&len), modifiers->getCloser(&len) );
+        fprintf( stderr, "%s", modifiers->getStatusMessage() );
     } else {
         inp = (pico_Char *) local_text;
     }
@@ -1145,7 +1164,7 @@ int main( int argc, const char ** argv )
     // 
     pico->cleanup();
 
-    //
+    // FIXME
     nano->playOutput();
 
 fast_exit:

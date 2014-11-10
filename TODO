@@ -1,0 +1,72 @@
+- free() pico buffs, 
+X fix speed,pitch,vol printouts, 
+- gprof, valgrind
+- autoname func
+- look for more Lingware/voices. Are there proprietary ones?
+
+- separate out playAudio class, 
+- add wav header code, 
+- extend playAudio class with possible modules
+    - libmp3lame
+    - oggvorbis 
+    - libfaad
+    - flac
+    - monkeys audio
+
+- write man page
+- submit to google code, other places
+
+==============================================================================
+- new design. due to the potentially large outputs, because output is in 16-bit WAV, 
+we are going to go with a design built around WRITING_FILES. and not just sending
+data in memory to PCM.  Due to this,
+
+we need to have:
+
+    - DEFAULT BYTE SIZE to segment files = 50mb
+    - takes optional prefix
+    - auto-file naming routine:
+        PREFIX=PREFIX_DEFAULT
+        if ( user_prefix )
+            PREFIX=user_prefix
+        <PREFIX>-001.wav    (50mb)
+        <PREFIX>-002.wav    (50mb)
+    - argument to set OUTPUT_DIRECTORY  (default: ".")
+    - argument to set SEGMENT_SIZE      (default: "50mb")
+    - argument to set PREFIX            (default: "nanotts00")
+    - argument to playback in PCM       (default: "off")
+
+- So we write these files; they set to a directory; the program knows where it wrote
+them. Then if we had told it to playback the result, it will just start loading them
+after the WAV generation is complete. It's neat and simple. We could also set it to 
+delete the WAVS after it plays, but I think that we leave that to bash instead.
+
+    - code to read common size suffix:
+        (B | b) = bytes
+        (K | k) = kilobytes
+        (M | m) = Megabytes
+        (G | g) = gigabytes
+
+    - code to check current directory for "prefix*", to prevent overwrites
+        if (last two digits of prefix are [0-9][0-9], it increments and makes that the new prefix)
+        else it adds a '02' to end of prefix, and makes prefix02 the new prefix;
+
+        So we could reasonably have audiobook-00x.wav, and then audiobook02-00x.wav, audiobook03-00x.wav
+
+-----------------------------------------------------------------------------
+- 16-bit per sample (mono)      16
+- 16000 per second              16 * 16000
+- 60 per minute                 16 * 16000 * 60     15360000 = 15-megabytes per minute
+- 60 per hour                   16 * 16000 * 3600   921600000 = not quite a gigabyte per hour
+-----------------------------------------------------------------------------
+Ok, I take it back,  the data space requirements are huge. We do need a codec. Since it's already 
+lo-fidelity spoken-word, you could just head straight for 32kbps mp3 as the target. 
+
+of course, as usual, I know next to nothing about codecs--I should know more. the other thing
+is, you should be able to drop the object file into a folder and load it into the program, so 
+that I am not bound to one codec over another.
+
+------------------------------------------------------------------
+lame:
+
+echo "eenie meany miny moh" | ./nanotts -c | lame -r -s 16 --bitwidth 16 --signed --little-endian -m m -b 32 -h - out.mp3
