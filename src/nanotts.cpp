@@ -400,23 +400,11 @@ char * Nano::copy_arg( int index )
     return buf;
 }
 
-int Nano::check_args() {
-    // INPUTS               OUTPUTS
-    // -w <words>           -o <file>
-    // -f <file>            -c stdout
-    // default: stdin       default: pcm
-
-    /* heuristic:
-        if -w | -f detected, either trump default. if both, take last seen.
-        if -o | -c detected, either trump, if both, take last 
-
-        for -w, -f, -o, sanity check their argument, else print error & exit
-    */
-
+int Nano::check_args() 
+{
     // DEFAULTS
     in_mode = IN_STDIN;
     out_mode = OUT_SINGLE_FILE;
-
 
     for ( int i = 1; i < my_argc; i++ )
     {
@@ -516,6 +504,11 @@ int Nano::check_args() {
         strcpy( prefix, "nanotts-001" );
     }
 
+    // 
+    if ( setup_input_output() < 0 ) {
+        return -2;
+    }
+
     return 0;
 }
 
@@ -538,7 +531,6 @@ int Nano::setup_input_output()
     case IN_SINGLE_FILE:
         // mmap elsewhere
         break;
-
     case IN_CMDLINE_ARG:
         break;
     case IN_MULTIPLE_FILES:
@@ -550,7 +542,6 @@ int Nano::setup_input_output()
     switch ( out_mode ) {
     case OUT_SINGLE_FILE:
         break;
-
     case OUT_STDOUT:
         out_fp = stdout;
         fprintf( stderr, "writing pcm stream to stdout\n" );
@@ -561,6 +552,7 @@ int Nano::setup_input_output()
         break;
     }
 
+#undef __NOT_IMPL__
     return 0;
 }
 
@@ -1085,12 +1077,6 @@ int main( int argc, const char ** argv )
     if ( nano->check_args() < 0 ) {
         delete nano;
         return -1;
-    }
-
-    // 
-    if ( nano->setup_input_output() < 0 ) {
-        delete nano;
-        return -2;
     }
 
     // 

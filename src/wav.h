@@ -41,7 +41,6 @@ struct WAV_HEADER {
 
 // function signatures
 void PrintWavinfo( struct wavinfo_t * w );
-const unsigned char * FindMemChunk( const unsigned char *buf, unsigned int buflen, const char *chunk, unsigned int chunklen );
 int GetWavInfo( const unsigned char *data, int size, struct wavinfo_t * info );
 
 #endif /* __WAV_H__ */
