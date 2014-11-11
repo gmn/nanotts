@@ -1,5 +1,5 @@
+- playback keys: spacebar, left+right arrow, ESC, +/- (playback speed)
 - free() pico buffs, 
-X fix speed,pitch,vol printouts, 
 - gprof, valgrind
 - autoname func
 - look for more Lingware/voices. Are there proprietary ones?
@@ -70,3 +70,19 @@ that I am not bound to one codec over another.
 lame:
 
 echo "eenie meany miny moh" | ./nanotts -c | lame -r -s 16 --bitwidth 16 --signed --little-endian -m m -b 32 -h - out.mp3
+
+------------------------------------------------------------------
+20141111
+lightbulb idea!
+
+* What if you integrate a video game like sound mixer system in with the voice output
+* So that not only can you play back text, but you can format text in such a way that
+    small, unobtrusive sound-effects are inserted as cues. 
+* Better yet, you augment the markup style already supported in Pico <speed level=200>words</speed>
+    but to include sound effects.  And you set the path at the beginning
+    <meta sfxpath="/path/to/files">
+
+    - the system loads these files, as well as any that are packaged with the system.
+
+    Then, in markup, you can set spaces and sfx cues IN THE TEXT.  And all the parser-system has to do is play it back.
+------------------------------------------------------------------
