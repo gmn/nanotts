@@ -1,11 +1,11 @@
 - playback keys: spacebar, left+right arrow, ESC, +/- (playback speed)
-- free() pico buffs, 
 - gprof, valgrind
 - autoname func
 - look for more Lingware/voices. Are there proprietary ones?
 
-- separate out playAudio class, 
-- add wav header code, 
+X free() pico buffs, 
+X separate out playAudio class, 
+X add wav header code, 
 - extend playAudio class with possible modules
     - libmp3lame
     - oggvorbis 

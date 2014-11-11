@@ -348,7 +348,7 @@ void Nano::PrintUsage() {
     memset( line2, 0, 80 );
     sprintf( line1, "  %s -f <filename> -o file1.wav --no-play", exename );
     sprintf( line2, "  echo \"Mary had a little lamb\" | %s", exename );
-    sprintf( line3, "  %s -w \"Once upon a midnight dreary\" -v en-US --speed 0.6", exename );
+    sprintf( line3, "  %s -w \"Once upon a midnight dreary\" -v en-US --speed 0.5 --pitch 0.5", exename );
 
     struct help {
         const char *arg;
@@ -442,6 +442,10 @@ int Nano::check_args() {
             if ( (in_filename = copy_arg( i + 1 )) == 0 )
                 return -1;
         }
+        else if ( strcmp( my_argv[i], "-" ) == 0 ) {
+            in_mode = IN_STDIN;
+            in_fp = stdin;
+        }
 
         // OUTPUTS
         else if ( strcmp( my_argv[i], "-o" ) == 0 ) {
@@ -521,6 +525,8 @@ int Nano::setup_input_output()
 
     switch ( in_mode ) {
     case IN_STDIN:
+        if ( in_fp )
+            break;
         // detect if stdin is coming from a pipe
         if ( ! isatty(fileno(stdin)) ) { // On windows prefix with underscores: _isatty, _fileno
             in_fp = stdin;
@@ -657,12 +663,18 @@ private:
     Listener<short> *   listener;
     Boilerplate *       modifiers;
 
+    void *              picoMemArea;
+    pico_Char *         picoTaFileName;
+    pico_Char *         picoSgFileName;
+    pico_Char *         picoTaResourceName;
+    pico_Char *         picoSgResourceName;
+
 public:
     Pico() ;
     ~Pico() ;
 
     void setPath( const char * path =0 );
-    int setupInternal() ;
+    int initializeSystem() ;
     void cleanup() ;
     void sendTextForProcessing( unsigned char *, long long int ) ;
     int process();
@@ -691,6 +703,12 @@ Pico::Pico() {
     text_remaining      = 0;
     listener            = 0;
     modifiers           = 0;
+
+    picoMemArea             = 0;
+    picoTaFileName          = 0;
+    picoSgFileName          = 0;
+    picoTaResourceName      = 0;
+    picoSgResourceName      = 0;
 }
 
 Pico::~Pico() {
@@ -699,6 +717,17 @@ Pico::~Pico() {
     }
 
     cleanup();
+
+    if ( picoMemArea )
+        free( picoMemArea );
+    if ( picoTaFileName )
+        free( picoTaFileName );
+    if ( picoSgFileName )
+        free( picoSgFileName );
+    if ( picoTaResourceName )
+        free( picoTaResourceName );
+    if ( picoSgResourceName )
+        free( picoSgResourceName );
 }
 
 void Pico::setPath( const char * path ) {
@@ -709,21 +738,12 @@ void Pico::setPath( const char * path ) {
     strcpy( picoLingwarePath, path );
 }
 
-int Pico::setupInternal() 
+int Pico::initializeSystem() 
 {
-    /* adaptation layer variables */
-    void *          picoMemArea             = 0;
-    pico_Char *     picoTaFileName          = 0;
-    pico_Char *     picoSgFileName          = 0;
-    pico_Char *     picoTaResourceName      = 0;
-    pico_Char *     picoSgResourceName      = 0;
     const int       PICO_MEM_SIZE           = 2500000;
     pico_Retstring  outMessage;
     int             ret;
 
-
-
-    // FIXME: does pico free memArea?  We need to profile: valgrind or gprof
     picoMemArea = malloc( PICO_MEM_SIZE );
 
     if ( (ret = pico_initialize( picoMemArea, PICO_MEM_SIZE, &picoSystem )) ) {
@@ -736,7 +756,6 @@ int Pico::setupInternal()
     }
 
     /* Load the text analysis Lingware resource file.   */
-    // FIXME: free this?
     picoTaFileName = (pico_Char *) malloc( PICO_MAX_DATAPATH_NAME_SIZE + PICO_MAX_FILE_NAME_SIZE );
 
     // path
@@ -760,7 +779,6 @@ int Pico::setupInternal()
     }
 
     /* Load the signal generation Lingware resource file.   */
-    // FIXME: free?
     picoSgFileName = (pico_Char *) malloc( PICO_MAX_DATAPATH_NAME_SIZE + PICO_MAX_FILE_NAME_SIZE );
 
     strcpy((char *) picoSgFileName,   picoLingwarePath );
@@ -773,7 +791,6 @@ int Pico::setupInternal()
     }
 
     /* Get the text analysis resource name.     */
-    // FIXME: free?
     picoTaResourceName = (pico_Char *) malloc( PICO_MAX_RESOURCE_NAME_SIZE );
     if((ret = pico_getResourceName( picoSystem, picoTaResource, (char *) picoTaResourceName ))) {
         pico_getSystemStatusMessage(picoSystem, ret, outMessage);
@@ -782,7 +799,6 @@ int Pico::setupInternal()
     }
 
     /* Get the signal generation resource name. */
-    // FIXME: free?
     picoSgResourceName = (pico_Char *) malloc( PICO_MAX_RESOURCE_NAME_SIZE );
     if((ret = pico_getResourceName( picoSystem, picoSgResource, (char *) picoSgResourceName ))) {
         pico_getSystemStatusMessage(picoSystem, ret, outMessage);
@@ -1097,7 +1113,10 @@ int main( int argc, const char ** argv )
     pico->addModifiers( nano->getModifiers() );
 
     //
-    pico->setupInternal();
+    if ( pico->initializeSystem() < 0 ) {
+        fprintf( stderr, " * problem initializing Svox Pico\n" );
+        goto fast_exit;
+    }
 
     //
     pico->sendTextForProcessing( words, length ); 
