@@ -9,6 +9,17 @@
     AudioPlayer_AO methods
 ================================================
 */
+AudioPlayer_AO::AudioPlayer_AO() : pcm_device(0), pcm_driver(0) 
+{
+    memset( &pcm_format, 0xbcbcbcbc, sizeof(pcm_format) );
+}
+
+AudioPlayer_AO::~AudioPlayer_AO()
+{
+    if ( pcm_device )
+        pcmShutdown();
+}
+
 int AudioPlayer_AO::pcmSetup()
 {
     /* -- Initialize -- */
@@ -16,13 +27,6 @@ int AudioPlayer_AO::pcmSetup()
 
     /* -- Setup for default driver -- */
     pcm_driver = ao_default_driver_id();
-
-    // set the PCM format from wav header
-    memset(&pcm_format, 0, sizeof(pcm_format));
-    pcm_format.bits         = 16;
-    pcm_format.channels     = 1;
-    pcm_format.rate         = 16000;
-    pcm_format.byte_format  = AO_FMT_LITTLE;
 
     /* -- Open driver -- */
     pcm_device = ao_open_live(pcm_driver, &pcm_format, 0 /* no options */);
@@ -36,7 +40,6 @@ int AudioPlayer_AO::pcmSetup()
 void AudioPlayer_AO::pcmPlay( char * buffer, unsigned int bytes )
 {
     ao_play( pcm_device, buffer, bytes );
-    fprintf( stderr, "finished playback\n" );
 }
 
 void AudioPlayer_AO::pcmShutdown() {
@@ -47,22 +50,24 @@ void AudioPlayer_AO::pcmShutdown() {
 
 void AudioPlayer_AO::OpenWavAndPlay( const char * filename ) 
 {
+    // open the audio file
     mmfile_t * mmap_wav = new mmfile_t( filename );
-
     if ( !mmap_wav->data ) {
         fprintf( stderr, "error mmap'ing .wav\n" );
         pcmShutdown();
         return;
     }
 
-    // initialize system audio 
-    pcmSetup();
-
     // read header meta info
     int offset = getPcmFormat( mmap_wav->data, mmap_wav->size );
 
+    // initialize system audio 
+    pcmSetup();
+
     // start playing at beginning of PCM samples
     pcmPlay( (char*)(mmap_wav->data + offset), mmap_wav->size - offset );
+
+    fprintf( stderr, "finished playback\n" );
 
     // close the mmap stream
     delete mmap_wav;

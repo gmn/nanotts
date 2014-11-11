@@ -11,8 +11,8 @@ class AudioPlayer_AO {
     int                 pcm_driver;
 
 public:
-    AudioPlayer_AO() : pcm_device(0), pcm_driver(0) {
-    }
+    AudioPlayer_AO();
+    ~AudioPlayer_AO();
 
     int  pcmSetup();
     void pcmPlay( char * , unsigned int );
