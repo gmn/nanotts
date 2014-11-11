@@ -26,17 +26,20 @@ Steps:
     - [X] select voice                  (-v <voice>)
     - [X] writes PCM-data to stdout     (-c)
     - [X] set voice files (lingware) path (-l <path>)
-    - [ ] progress meter to stderr 
     - [X] set speed
     - [X] set volume
     - [X] set pitch
+    - [ ] progress meter to stderr 
+    - [ ] playback keys: spacebar, left+right arrow, ESC, +/- (playback speed)
+    - [ ] run through: gprof, valgrind
+    - [ ] write man page ; and make install
+    - [ ] autonaming func
     - [ ] -q flag to silence output to {stdout, stderr}
     - [ ] catch signals to cancel PCM playback/output cleanly
-    - [ ] works on both Mac and Linux
+    - [ ] confirm working on both Mac and Linux
 - [ ] extra:
     - [ ] able to read multiple files at once (-files <file1>[file2][file3][..])
     - [ ] limit text input to N lines
-    - [ ] slow-down/speed-up speaking rate of voice
     - [ ] bit-rate, frequency, channel, parms for .wav 
     - [ ] mp3 output 
     - [ ] store base settings in $HOME/.config type file, so you dont have to type language prefs every time
