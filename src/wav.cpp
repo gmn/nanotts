@@ -10,7 +10,7 @@ void PrintWavinfo( struct wavinfo_t * w ) {
 // returns a pointer to the first byte in the string supplied in chunk
 //  or null if not found
 // does not match the trailing zero in chunk
-const unsigned char * FindMemChunk( const unsigned char *buf, unsigned int buflen, const char *chunk, unsigned int chunklen ) {
+static const unsigned char * FindMemChunk( const unsigned char *buf, unsigned int buflen, const char *chunk, unsigned int chunklen ) {
     const unsigned char *bp, *cp, *bp2;
     bp = buf;
     while ( bp - buf < buflen ) {

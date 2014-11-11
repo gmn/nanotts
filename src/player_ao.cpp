@@ -94,7 +94,7 @@ int AudioPlayer_AO::getPcmFormat( unsigned char * data, unsigned int length )
 
 void AudioPlayer_AO::OpenAndPlay( const char * filename )
 {
-    // FIXME: file-type detection by extension and send files to different codec handlers
+    // FIXME: put file-type detection here. do by extension and send files to different codec handlers
 
     this->OpenWavAndPlay( filename );
 }
