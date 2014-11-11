@@ -1,7 +1,10 @@
 - playback keys: spacebar, left+right arrow, ESC, +/- (playback speed)
 - gprof, valgrind
-- autoname func
+- write man page
+- autonaming func
+
 - look for more Lingware/voices. Are there proprietary ones?
+- submit to google code, other places
 
 X free() pico buffs, 
 X separate out playAudio class, 
@@ -13,8 +16,6 @@ X add wav header code,
     - flac
     - monkeys audio
 
-- write man page
-- submit to google code, other places
 
 ==============================================================================
 - new design. due to the potentially large outputs, because output is in 16-bit WAV, 
@@ -85,4 +86,6 @@ lightbulb idea!
     - the system loads these files, as well as any that are packaged with the system.
 
     Then, in markup, you can set spaces and sfx cues IN THE TEXT.  And all the parser-system has to do is play it back.
+
+    <s name="bing"/><a name="bong"/>Good Morning Sir.
 ------------------------------------------------------------------
