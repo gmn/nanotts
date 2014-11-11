@@ -1,7 +1,7 @@
 // encoder_ao.cpp
 
 #include <stdio.h>
-#include "encoder_ao.h"
+#include "player_ao.h"
 #include "mmfile.h"
 
 /*
@@ -59,7 +59,7 @@ void AudioPlayer_AO::OpenWavAndPlay( const char * filename )
     pcmSetup();
 
     // read header meta info
-    int offset = getPcmFormat( mmap_wav->data, mmap->size );
+    int offset = getPcmFormat( mmap_wav->data, mmap_wav->size );
 
     // start playing at beginning of PCM samples
     pcmPlay( (char*)(mmap_wav->data + offset), mmap_wav->size - offset );
@@ -71,11 +71,10 @@ void AudioPlayer_AO::OpenWavAndPlay( const char * filename )
     pcmShutdown();
 }
 
-int AudioPlayer_AO::getPcmFormat( const char * data, unsigned int * length ) 
+int AudioPlayer_AO::getPcmFormat( unsigned char * data, unsigned int length ) 
 {
     struct wavinfo_t wavinfo;
     GetWavInfo( data, length, &wavinfo );
-    PrintWavinfo( &wavinfo );
 
     // set the PCM format from wav header
     memset( &pcm_format, 0, sizeof(pcm_format) );
@@ -88,7 +87,7 @@ int AudioPlayer_AO::getPcmFormat( const char * data, unsigned int * length )
     return wavinfo.dataofs;
 }
 
-void AudioPlayer_AO:OpenAndPlay( const char * filename )
+void AudioPlayer_AO::OpenAndPlay( const char * filename )
 {
     // FIXME: file-type detection by extension and send files to different codec handlers
 

@@ -40,7 +40,7 @@ extern "C" {
 
 #include "PicoVoices.h"
 #include "mmfile.h"
-#include "encoder_ao.h"
+#include "player_ao.h"
 
 class Nano;
 

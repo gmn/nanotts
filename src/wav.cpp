@@ -33,10 +33,9 @@ int GetWavInfo( const unsigned char *data, int size, struct wavinfo_t * info )
 
     if ( !data )
         return -1;
+    if ( !info ) 
+        return -1;
 
-    if ( !info ) {
-        info = malloc( sizeof(struct wavinfo_t) );
-    }
     memset( info, 0, sizeof(struct wavinfo_t) );
 
     if ( !(p = FindMemChunk( data, size, "RIFF", 4 )) )

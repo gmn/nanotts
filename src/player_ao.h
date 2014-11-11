@@ -1,7 +1,8 @@
-#ifndef __AUDIOPLAYER_AO_H__
-#define __AUDIOPLAYER_AO_H__
+#ifndef __PLAYER_AO_H__
+#define __PLAYER_AO_H__
 
-#include <wav.h>
+#include <ao/ao.h>
+#include "wav.h"
 
 class AudioPlayer_AO {
 
@@ -11,7 +12,6 @@ class AudioPlayer_AO {
 
 public:
     AudioPlayer_AO() : pcm_device(0), pcm_driver(0) {
-        memset(&pcm_format, 0xcbcbcbcb, sizeof(pcm_format));
     }
 
     int  pcmSetup();
@@ -21,8 +21,8 @@ public:
     void OpenWavAndPlay( const char * );
     void OpenAndPlay( const char * );
 
-    int  getPcmFormat( const char *, unsigned int * );
+    int  getPcmFormat( unsigned char *, unsigned int );
 };
 
-#endif /* __AUDIOPLAYER_AO_H__ */
+#endif /* __PLAYER_AO_H__ */
 
