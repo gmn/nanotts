@@ -40,6 +40,7 @@ extern "C" {
 
 #include "PicoVoices.h"
 #include "mmfile.h"
+#include "encoder_ao.h"
 
 class Nano;
 
@@ -244,10 +245,6 @@ private:
 
     char *              copy_arg( int );
     
-    ao_device *         pcm_device;
-    ao_sample_format    pcm_format;
-    int                 pcm_driver;
-
     unsigned char *     input_buffer;
     unsigned int        input_size;
 
@@ -269,11 +266,7 @@ public:
     int setup_input_output() ;
 
     int getInput( unsigned char ** data, unsigned int * bytes );
-    void playOutput();
-
-    int  pcmSetup();
-    void pcmPlay( char * , unsigned int );
-    void pcmShutdown();
+    int playOutput();
 
     const char * getVoice();
     const char * getPath();
@@ -294,7 +287,6 @@ Nano::Nano( const int i, const char ** v ) : my_argc(i), my_argv(v), stdout_proc
     words = 0;
     in_fp = 0;
     out_fp = 0;
-    pcm_device = 0;
     input_buffer = 0;
     input_size = 0;
 
@@ -315,10 +307,6 @@ Nano::~Nano() {
         delete[] in_filename;
     if ( words )
         delete[] words;
-
-    if ( pcm_device ) {
-        pcmShutdown();
-    }
 
     if ( input_buffer ) {
         switch ( in_mode ) {
@@ -603,64 +591,14 @@ int Nano::getInput( unsigned char ** data, unsigned int * bytes )
 }
 
 // 
-void Nano::playOutput() 
+int Nano::playOutput() 
 {
     if ( silence_output )
-        return;
+        return 0;
     if ( out_mode == OUT_STDOUT )
-        return;
+        return 0;
 
-    pcmSetup();
-
-    mmfile_t * mmap_wav = new mmfile_t( out_filename );
-
-    if ( !mmap_wav->data ) {
-        fprintf( stderr, "error mmap'ing .wav\n" );
-        pcmShutdown();
-        return;
-    }
-
-    pcmPlay( (char*)mmap_wav->data, mmap_wav->size );
-
-    delete mmap_wav;
-
-    pcmShutdown();
-}
-
-int Nano::pcmSetup() 
-{
-    /* -- Initialize -- */
-    ao_initialize();
-
-    /* -- Setup for default driver -- */
-    pcm_driver = ao_default_driver_id();
-
-    // set the PCM format from wav header
-    memset(&pcm_format, 0, sizeof(pcm_format));
-    pcm_format.bits         = 16;
-    pcm_format.channels     = 1;
-    pcm_format.rate         = 16000;
-    pcm_format.byte_format  = AO_FMT_LITTLE;
-
-    /* -- Open driver -- */
-    pcm_device = ao_open_live(pcm_driver, &pcm_format, 0 /* no options */);
-    if (pcm_device == 0) {
-        fprintf(stderr, "Error opening device.\n");
-        return -1;
-    }
-    return 0;
-}
-
-void Nano::pcmPlay( char * buffer, unsigned int bytes ) 
-{
-    ao_play( pcm_device, buffer, bytes );
-    fprintf( stderr, "finished playback\n" );
-}
-
-void Nano::pcmShutdown() {
-    ao_close(pcm_device);
-    ao_shutdown();
-    pcm_device = 0;
+    return 1;
 }
 
 const char * Nano::getVoice() {
@@ -1170,8 +1108,12 @@ int main( int argc, const char ** argv )
     // 
     pico->cleanup();
 
-    // FIXME
-    nano->playOutput();
+    //
+    if ( nano->playOutput() ) {
+        AudioPlayer_AO * player = new AudioPlayer_AO();
+        player->OpenAndPlay( nano->outFilename() );
+        delete player;
+    }
 
 fast_exit:
     delete pico;
