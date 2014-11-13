@@ -48,6 +48,14 @@ class Nano;
 #define PICO_DEFAULT_PITCH 1.05f
 #define PICO_DEFAULT_VOLUME 1.00f
 
+
+#ifndef _PICO_LANG_DIR
+#define _PICO_LANG_DIR 1
+const char * PICO_LANG_DIR = "./lang/";
+#else
+const char * PICO_LANG_DIR = _PICO_LANG_DIR ;
+#endif
+
 /*
 ================================================
 Listener
@@ -356,7 +364,8 @@ void Nano::PrintUsage() {
     } help_lines[] = {
         { "  -h, --help", "displays this" },
         { "  -v <voice>", "select voice. Default: en-GB" },
-        { "  -l <directory>", "Lingware voices directory. (default: \"./lang\")" },
+        //{ "  -l <directory>", "Lingware voices directory. (default: \"./lang\")" },
+        { "  -l <directory>", "Lingware voices directory." },
         { "  -w <words>", "words. must be correctly quoted" },
         { "  -f <filename>", "filename to read input from" },
 //        { "  -p <prefix>", "write output to multiple numbered files with prefix" },
@@ -488,8 +497,9 @@ int Nano::check_args()
         strcpy( voice, "en-GB" );
     }
     if ( !voicedir ) {
-        voicedir = new char[8];
-        strcpy( voicedir, "./lang/" );
+        int len = strlen( PICO_LANG_DIR ) + 1;
+        voicedir = new char[len];
+        strcpy( voicedir, PICO_LANG_DIR );
     }
 
     // FIXME: temporary
@@ -724,7 +734,7 @@ Pico::~Pico() {
 
 void Pico::setPath( const char * path ) {
     if ( !path )
-        path = "./lang/";
+        path = PICO_LANG_DIR;
     unsigned int len = strlen( path ) + 1;
     picoLingwarePath = new char[ len ];
     strcpy( picoLingwarePath, path );
