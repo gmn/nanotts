@@ -42,8 +42,6 @@ extern "C" {
 #include "mmfile.h"
 #include "player_ao.h"
 
-class Nano;
-
 #define PICO_DEFAULT_SPEED 0.88f
 #define PICO_DEFAULT_PITCH 1.05f
 #define PICO_DEFAULT_VOLUME 1.00f
@@ -55,6 +53,10 @@ const char * PICO_LANG_DIR = "./lang/";
 #else
 const char * PICO_LANG_DIR = _PICO_LANG_DIR ;
 #endif
+
+
+// forward declaration
+class Nano;
 
 /*
 ================================================
@@ -214,9 +216,9 @@ pads_t Boilerplate::pads[] = {
 
 /*
 ================================================
-Nano
+    Nano
 
-Singleton class to handle workings of this program
+    class to handle workings of this program
 ================================================
 */
 class Nano 
@@ -262,12 +264,12 @@ private:
     void write_short_to_stdout( short *, unsigned int );
 
     Boilerplate         modifiers;
-
+    
 public:
     bool                silence_output;
 
     Nano( const int, const char ** );
-    ~Nano();
+    virtual ~Nano();
 
     void PrintUsage();
     int check_args();
@@ -366,7 +368,7 @@ void Nano::PrintUsage() {
         { "  -v <voice>", "select voice. Default: en-GB" },
         //{ "  -l <directory>", "Lingware voices directory. (default: \"./lang\")" },
         { "  -l <directory>", "Lingware voices directory." },
-        { "  -w <words>", "words. must be correctly quoted" },
+        { "  -w <words>", "words. must be correctly quoted." },
         { "  -f <filename>", "filename to read input from" },
 //        { "  -p <prefix>", "write output to multiple numbered files with prefix" },
         { "  -o <filename>", "write output to single file; overrides prefix" },
@@ -409,7 +411,7 @@ char * Nano::copy_arg( int index )
     return buf;
 }
 
-int Nano::check_args() 
+int Nano::check_args()
 {
     // DEFAULTS
     in_mode = IN_STDIN;
@@ -417,6 +419,7 @@ int Nano::check_args()
 
     for ( int i = 1; i < my_argc; i++ )
     {
+        // PRINT HELP
         if ( strcmp( my_argv[i], "-h" ) == 0 || strcmp( my_argv[i], "--help" ) == 0 ) {
             PrintUsage();
             return -1;
@@ -489,6 +492,15 @@ int Nano::check_args()
                 return -1;
             modifiers.setVolume( strtof(my_argv[i+1], 0) );
         }
+
+        // doesn't match any expected arguments; therefor try to speak it
+        else {
+            words = copy_arg( i );
+            if ( IN_CMDLINE_ARG != in_mode ) {
+                fprintf( stderr, " * speaking non-matching input\n" );
+            }
+            in_mode = IN_CMDLINE_ARG;
+        }
     }
 
     // post-DEFAULTS
@@ -534,8 +546,10 @@ int Nano::setup_input_output()
         if ( ! isatty(fileno(stdin)) ) { // On windows prefix with underscores: _isatty, _fileno
             in_fp = stdin;
         } else {
-            fprintf( stderr, " **error: reading from stdin.  (try -h for help)\n" );
-            return -1;
+            if ( !words ) {
+                fprintf( stderr, " **error: reading from stdin.  (try -h for help)\n" );
+                return -1;
+            }
         }
         break;
     case IN_SINGLE_FILE:
@@ -635,6 +649,94 @@ Boilerplate * Nano::getModifiers() {
 }
 //////////////////////////////////////////////////////////////////
 
+
+/*
+================================================
+    NanoSingleton
+
+    singleton subclass 
+================================================
+*/
+class NanoSingleton : public Nano {
+public:
+
+    /**
+     * only method to get singleton handle to this object
+     */
+    static NanoSingleton& instance();
+
+    /**
+     * explicit destruction
+     */
+    static void destroy();
+
+    /**
+     * utility function to pass-through these arguments
+     */
+    static void setArgs( const int i, const char ** v );
+    
+private:
+    /**
+     * prevent outside construction
+     */
+    NanoSingleton( const int, const char ** );
+
+    /**
+     * prevent compile-time deletion
+     */
+    virtual ~NanoSingleton();
+
+    /**
+     * prevent copy-constructor
+     */
+    NanoSingleton( const NanoSingleton& ) ;
+
+    /**
+     * prevent assignment operator
+     */
+    NanoSingleton& operator=( const NanoSingleton & ) ;
+
+    /**
+     * sole instance of this object; static assures 0 initialization for free
+     */
+    static NanoSingleton * single_instance;
+    static int              my_argc;
+    static const char **    my_argv;
+};
+
+NanoSingleton * NanoSingleton::single_instance;
+int             NanoSingleton::my_argc;
+const char **   NanoSingleton::my_argv;
+
+// implementations
+NanoSingleton & NanoSingleton::instance() {
+    if ( 0 == single_instance ) {
+        single_instance = new NanoSingleton( my_argc, my_argv );
+    }
+    return *single_instance;
+}
+
+void NanoSingleton::destroy() {
+    if ( single_instance ) {
+        delete single_instance;
+        single_instance = 0;
+    }
+}
+
+NanoSingleton::NanoSingleton( const int i, const char ** v ) : Nano( i, v ) {
+}
+
+NanoSingleton::~NanoSingleton() {
+}
+
+void NanoSingleton::setArgs( const int i, const char ** v ) {
+    my_argc = i;
+    my_argv = v;
+}
+
+
+//Nano::Nano( const int i, const char ** v ) : my_argc(i), my_argv(v), stdout_processor(this) {
+//////////////////////////////////////////////////////////////////
 
 
 
@@ -1081,37 +1183,39 @@ void Pico::addModifiers( Boilerplate * modifiers ) {
 
 int main( int argc, const char ** argv ) 
 {
-    Nano * nano = new Nano( argc, argv );
+    NanoSingleton::setArgs( argc, argv );
+
+    NanoSingleton & nano = NanoSingleton::instance();
 
     // 
-    if ( nano->check_args() < 0 ) {
-        delete nano;
+    if ( nano.check_args() < 0 ) {
+        nano.destroy();
         return -1;
     }
 
     // 
     unsigned char * words   = 0;
     unsigned int    length  = 0;
-    if ( nano->getInput( &words, &length ) < 0 ) {
-        delete nano;
+    if ( nano.getInput( &words, &length ) < 0 ) {
+        nano.destroy();
         return -3;
     }
 
     //
     Pico *pico = new Pico();
-    pico->setPath( nano->getPath() );
-    pico->setOutFilename( nano->outFilename() );
-    if ( pico->setVoice( nano->getVoice() ) < 0 ) {
-        fprintf( stderr, "set voice failed, with: \"%s\n\"", nano->getVoice() );
-        goto fast_exit;
+    pico->setPath( nano.getPath() );
+    pico->setOutFilename( nano.outFilename() );
+    if ( pico->setVoice( nano.getVoice() ) < 0 ) {
+        fprintf( stderr, "set voice failed, with: \"%s\n\"", nano.getVoice() );
+        goto early_exit;
     }
-    pico->setListener( nano->getListener() );
-    pico->addModifiers( nano->getModifiers() );
+    pico->setListener( nano.getListener() );
+    pico->addModifiers( nano.getModifiers() );
 
     //
     if ( pico->initializeSystem() < 0 ) {
         fprintf( stderr, " * problem initializing Svox Pico\n" );
-        goto fast_exit;
+        goto early_exit;
     }
 
     //
@@ -1124,13 +1228,14 @@ int main( int argc, const char ** argv )
     pico->cleanup();
 
     //
-    if ( nano->playOutput() ) {
+    if ( nano.playOutput() ) {
         AudioPlayer_AO * player = new AudioPlayer_AO();
-        player->OpenAndPlay( nano->outFilename() );
+        player->OpenAndPlay( nano.outFilename() );
         delete player;
     }
 
-fast_exit:
+early_exit:
     delete pico;
-    delete nano;
+    nano.destroy();
 }
+
