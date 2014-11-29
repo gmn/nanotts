@@ -1,7 +1,7 @@
 
 PROGRAM = nanotts
 PICO_LIBRARY = svoxpico/.libs/libttspico.a 
-#OPT_FLAG = -O2
+OPT_FLAG = -O2
 SHELL := /bin/bash
 
 all: $(PROGRAM)

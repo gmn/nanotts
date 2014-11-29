@@ -671,7 +671,7 @@ public:
     static void destroy();
 
     /**
-     * utility function to pass-through these arguments
+     * utility method to pass-through arguments
      */
     static void setArgs( const int i, const char ** v );
     
@@ -733,9 +733,6 @@ void NanoSingleton::setArgs( const int i, const char ** v ) {
     my_argc = i;
     my_argv = v;
 }
-
-
-//Nano::Nano( const int i, const char ** v ) : my_argc(i), my_argv(v), stdout_processor(this) {
 //////////////////////////////////////////////////////////////////
 
 
@@ -775,7 +772,7 @@ private:
 
 public:
     Pico() ;
-    ~Pico() ;
+    virtual ~Pico() ;
 
     void setPath( const char * path =0 );
     int initializeSystem() ;
@@ -1178,6 +1175,71 @@ void Pico::addModifiers( Boilerplate * modifiers ) {
 }
 //////////////////////////////////////////////////////////////////
 
+/** 
+ * Pico wrapped with singleton
+ */
+class PicoSingleton : public Pico {
+public:
+
+    /**
+     * only method to get singleton handle to this object
+     */
+    static PicoSingleton & instance();
+
+    /**
+     * explicit destruction
+     */
+    static void destroy();
+
+private:
+    /**
+     * prevent outside construction
+     */
+    PicoSingleton();
+
+    /**
+     * prevent compile-time deletion
+     */
+    virtual ~PicoSingleton();
+
+    /**
+     * prevent copy-constructor
+     */
+    PicoSingleton( const PicoSingleton& ) ;
+
+    /**
+     * prevent assignment operator
+     */
+    PicoSingleton& operator=( const PicoSingleton & ) ;
+
+    /**
+     * sole instance of this object; static assures 0 initialization for free
+     */
+    static PicoSingleton * single_instance;
+};
+
+PicoSingleton & PicoSingleton::instance() {
+    if ( 0 == single_instance ) {
+        single_instance = new PicoSingleton();
+    }
+    return *single_instance;
+}
+
+void PicoSingleton::destroy() {
+    if ( single_instance ) {
+        delete single_instance;
+        single_instance = 0;
+    }
+}
+
+PicoSingleton::PicoSingleton() {
+}
+
+PicoSingleton::~PicoSingleton() {
+}
+
+PicoSingleton * PicoSingleton::single_instance;
+//////////////////////////////////////////////////////////////////
 
 
 
@@ -1202,30 +1264,30 @@ int main( int argc, const char ** argv )
     }
 
     //
-    Pico *pico = new Pico();
-    pico->setPath( nano.getPath() );
-    pico->setOutFilename( nano.outFilename() );
-    if ( pico->setVoice( nano.getVoice() ) < 0 ) {
+    PicoSingleton & pico = PicoSingleton::instance();
+    pico.setPath( nano.getPath() );
+    pico.setOutFilename( nano.outFilename() );
+    if ( pico.setVoice( nano.getVoice() ) < 0 ) {
         fprintf( stderr, "set voice failed, with: \"%s\n\"", nano.getVoice() );
         goto early_exit;
     }
-    pico->setListener( nano.getListener() );
-    pico->addModifiers( nano.getModifiers() );
+    pico.setListener( nano.getListener() );
+    pico.addModifiers( nano.getModifiers() );
 
     //
-    if ( pico->initializeSystem() < 0 ) {
+    if ( pico.initializeSystem() < 0 ) {
         fprintf( stderr, " * problem initializing Svox Pico\n" );
         goto early_exit;
     }
 
     //
-    pico->sendTextForProcessing( words, length ); 
+    pico.sendTextForProcessing( words, length ); 
 
     //
-    pico->process();
+    pico.process();
 
     // 
-    pico->cleanup();
+    pico.cleanup();
 
     //
     if ( nano.playOutput() ) {
@@ -1235,7 +1297,7 @@ int main( int argc, const char ** argv )
     }
 
 early_exit:
-    delete pico;
+    pico.destroy();
     nano.destroy();
 }
 
