@@ -29,6 +29,7 @@ $(PROGRAM): $(PICO_LIBRARY) $(OBJECTS_DIR) $(OBJECTS)
 clean:
 	@for file in $(OBJECTS) $(PROGRAM) pico2wave.o pico2wave; do if [ -f $${file} ]; then rm $${file}; echo rm $${file}; fi; done
 	@if [ -d $(OBJECTS_DIR) ]; then rmdir $(OBJECTS_DIR) ; fi
+	@echo "use \"make clean_all\" to also cleanup svoxpico directory"
 
 clean_all: clean
 	cd svoxpico; make clean ; ./clean.sh
