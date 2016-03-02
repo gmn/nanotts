@@ -72,13 +72,18 @@ void mmfile_t::close()
     CloseHandle(hFile);
 
 #else /* Unix|Mac */
-    if ( data )
-        if ( -1 == munmap( data, size ) )
+    if ( data ) {
+        if ( -1 == munmap( data, size ) ) {
             fprintf( stderr, "mmfile: failed to unmap file: %s\n", filename );
+        }
+        data = 0;
+    }
     if ( fp )
         fclose( fp );
+    fp = 0;
     if ( filename )
         free( filename );
+    filename = 0;
 #endif
 }
 
