@@ -54,4 +54,4 @@ echo "eenie meany miny moh" | ./nanotts -c | lame -r -s 16 --bitwidth 16 --signe
 I know what you're thinking--mp3 is a mess. And you would be right to think that. Basically, because it's raw PCM, you have to tell lame exactly what format to expect. But hey, at least right now mp3 is automatable!
 
 
-email: _greg AT naughton DOT org
+email: _greg AT naughton DOT org_
