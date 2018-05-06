@@ -1,6 +1,6 @@
 
 PROGRAM = nanotts
-PICO_LIBRARY = svoxpico/.libs/libttspico.a 
+PICO_LIBRARY = svoxpico/.libs/libttspico.a
 OPT_FLAG = -O2
 SHELL := /bin/bash
 
@@ -10,12 +10,12 @@ OBJECTS_DIR = objs
 
 OBJECTS = \
     $(OBJECTS_DIR)/mmfile.o    \
-    $(OBJECTS_DIR)/nanotts.o   \
+    $(OBJECTS_DIR)/main.o      \
     $(OBJECTS_DIR)/wav.o       \
-    $(OBJECTS_DIR)/player_ao.o 
+    $(OBJECTS_DIR)/player_ao.o
 
-$(OBJECTS_DIR)/%.o: ./src/%.cpp 
-	g++ -D_PICO_LANG_DIR=\"/usr/share/pico/lang/\" -I. -I./svoxpico -Wall -g $(OPT_FLAG) -c $^ -o $@ 
+$(OBJECTS_DIR)/%.o: ./src/%.cpp
+	g++ -D_PICO_LANG_DIR=\"/usr/share/pico/lang/\" -I. -I./svoxpico -Wall -g $(OPT_FLAG) -c $^ -o $@
 
 $(OBJECTS_DIR):
 	@[ -d $(OBJECTS_DIR) ] || mkdir $(OBJECTS_DIR)
