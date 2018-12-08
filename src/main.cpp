@@ -47,12 +47,15 @@ extern "C" {
 #define PICO_DEFAULT_VOLUME 1.00f
 
 
-#ifndef _PICO_LANG_DIR
-#define _PICO_LANG_DIR 1
-const char * PICO_LANG_DIR = "./lang/";
-#else
-const char * PICO_LANG_DIR = _PICO_LANG_DIR ;
-#endif
+// #ifndef _PICO_LANG_DIR
+// #define _PICO_LANG_DIR 1
+// const char * PICO_LANG_DIR = "./lang/";
+// #else
+// const char * PICO_LANG_DIR = _PICO_LANG_DIR ;
+// #endif
+
+// searching these paths
+const char * lingware_paths[ 2 ] = { "./lang", "/usr/share/pico/lang" };
 
 #define GLOBAL_PREFIX "nanotts-output-"
 #define GLOBAL_SUFFIX ".wav"
@@ -253,7 +256,7 @@ private:
     const char *        exename;
 
     char *              voice;
-    char *              voicedir;
+    char *              langfiledir;
     char                prefix[ 100 ];
     char                suffix[ 100 ];
     char *              out_filename;
@@ -285,11 +288,11 @@ public:
     int setup_input_output();
     int verify_input_output();
 
-    int getInput( unsigned char ** data, unsigned int * bytes );
+    int ProduceInput( unsigned char ** data, unsigned int * bytes );
     int playOutput();
 
     const char * getVoice();
-    const char * getPath();
+    const char * getLangFilePath();
 
     const char * outFilename() const { return out_filename; }
 
@@ -301,7 +304,7 @@ public:
 
 Nano::Nano( const int i, const char ** v ) : my_argc(i), my_argv(v), stdout_processor(this) {
     voice = 0;
-    voicedir = 0;
+    langfiledir = 0;
     sprintf( prefix, GLOBAL_PREFIX );
     sprintf( suffix, GLOBAL_SUFFIX );
     out_filename = 0;
@@ -319,8 +322,8 @@ Nano::Nano( const int i, const char ** v ) : my_argc(i), my_argv(v), stdout_proc
 Nano::~Nano() {
     if ( voice )
         delete[] voice;
-    if ( voicedir )
-        delete[] voicedir;
+    if ( langfiledir )
+        delete[] langfiledir;
     if ( out_filename )
         delete[] out_filename;
     if ( in_filename )
@@ -527,9 +530,9 @@ int Nano::check_args()
         }
         else if ( strcmp( my_argv[i], "-l" ) == 0 ) {
             WARN_UNMATCHED_INPUTS();
-            if ( (voicedir = copy_arg( i + 1 )) == 0 )
+            if ( (langfiledir = copy_arg( i + 1 )) == 0 )
                 return -1;
-            fprintf( stderr, "Using Lingware directory: %s\n", voicedir );
+            fprintf( stderr, "Using Lingware directory: %s\n", langfiledir );
             ++i;
         }
 
@@ -579,10 +582,33 @@ int Nano::check_args()
         voice = new char[6];
         strcpy( voice, "en-GB" );
     }
-    if ( !voicedir ) {
-        int len = strlen( PICO_LANG_DIR ) + 1;
-        voicedir = new char[len];
-        strcpy( voicedir, PICO_LANG_DIR );
+
+    if ( !langfiledir ) {
+        const char * path_p = 0;
+        char test_file[ 128 ];
+        for ( unsigned int i = 0; i < sizeof(lingware_paths)/sizeof(lingware_paths[0]); ++i ) {
+            sprintf( test_file, "%s/%s", lingware_paths[i], "en-GB_ta.bin" );
+            struct stat ss;
+            if ( -1 != stat( lingware_paths[i], &ss ) ) {
+                if ( S_ISDIR( ss.st_mode ) ) {
+                    if ( -1 != stat( test_file, &ss ) ) {
+                        if ( S_ISREG( ss.st_mode ) ) {
+                            path_p = lingware_paths[i];
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+
+        if ( !path_p ) {
+            fprintf( stderr, " **error: Lang file path not found. Looking in: %s, %s\n\n", lingware_paths[0], lingware_paths[1] );
+            return -8;
+        }
+
+        int len = strlen( path_p ) + 1;
+        langfiledir = new char[len];
+        strcpy( langfiledir, path_p );
     }
 
     if ( !out_filename ) {
@@ -668,7 +694,7 @@ int Nano::verify_input_output() {
 
 // puts input into *data, and number_bytes into bytes
 // returns 0 on no more data
-int Nano::getInput( unsigned char ** data, unsigned int * bytes )
+int Nano::ProduceInput( unsigned char ** data, unsigned int * bytes )
 {
     switch( in_mode ) {
     case IN_STDIN:
@@ -715,8 +741,8 @@ const char * Nano::getVoice() {
     return voice;
 }
 
-const char * Nano::getPath() {
-    return voicedir;
+const char * Nano::getLangFilePath() {
+    return langfiledir;
 }
 
 void Nano::write_short_to_stdout( short * data, unsigned int shorts ) {
@@ -862,7 +888,7 @@ public:
     Pico() ;
     virtual ~Pico() ;
 
-    void setPath( const char * path =0 );
+    void setLangFilePath( const char * path =0 );
     int initializeSystem() ;
     void cleanup() ;
     void sendTextForProcessing( unsigned char *, long long int ) ;
@@ -919,9 +945,7 @@ Pico::~Pico() {
         free( picoSgResourceName );
 }
 
-void Pico::setPath( const char * path ) {
-    if ( !path )
-        path = PICO_LANG_DIR;
+void Pico::setLangFilePath( const char * path ) {
     unsigned int len = strlen( path ) + 1;
     picoLingwarePath = new char[ len ];
     strcpy( picoLingwarePath, path );
@@ -949,7 +973,7 @@ int Pico::initializeSystem()
 
     // path
     if ( !picoLingwarePath )
-        setPath();
+        setLangFilePath();
     strcpy((char *) picoTaFileName, picoLingwarePath);
 
     // check for connecting slash
@@ -971,6 +995,8 @@ int Pico::initializeSystem()
     picoSgFileName = (pico_Char *) malloc( PICO_MAX_DATAPATH_NAME_SIZE + PICO_MAX_FILE_NAME_SIZE );
 
     strcpy((char *) picoSgFileName,   picoLingwarePath );
+    if ( picoSgFileName[len-1] != '/' )
+        strcat((char*) picoSgFileName, "/");
     strcat((char *) picoSgFileName,   voices.getSgName() );
 
     if ( (ret = pico_loadResource(picoSystem, picoSgFileName, &picoSgResource)) ) {
@@ -1343,23 +1369,16 @@ int main( int argc, const char ** argv )
     }
 
     //
-    if ( !nano.outFilename() && !nano.getListener() ) {
-        fprintf( stderr, "No possible output\n\n" );
-        nano.PrintUsage();
-        return 127; // command not found
-    }
-
-    //
     unsigned char * words   = 0;
     unsigned int    length  = 0;
-    if ( nano.getInput( &words, &length ) < 0 ) {
+    if ( nano.ProduceInput( &words, &length ) < 0 ) {
         nano.destroy();
         return 65; // data format error
     }
 
     //
     PicoSingleton & pico = PicoSingleton::instance();
-    pico.setPath( nano.getPath() );
+    pico.setLangFilePath( nano.getLangFilePath() );
     pico.setOutFilename( nano.outFilename() );
 
     if ( pico.setVoice( nano.getVoice() ) < 0 ) {
@@ -1401,11 +1420,3 @@ int main( int argc, const char ** argv )
     return 0;
 }
 
-/*
-
-check all inputs and outputs, if no outputs are specified, print message warning with available options
-
-same for inputs, check first STDIN, then COMMAND_LINE_SWITCH_-i (overrides trailing), then trailing.
-stdin overrides -i, -i overrides trailing, ... but for each should warn. what if we pass -i, and stdin? then should ERROR and print better help
-
-*/
