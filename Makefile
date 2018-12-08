@@ -1,6 +1,6 @@
 
 PROGRAM = nanotts
-PICO_LIBRARY = svoxpico/.libs/libttspico.a 
+PICO_LIBRARY = svoxpico/.libs/libttspico.a
 OPT_FLAG = -O2
 SHELL := /bin/bash
 
@@ -10,12 +10,13 @@ OBJECTS_DIR = objs
 
 OBJECTS = \
     $(OBJECTS_DIR)/mmfile.o    \
-    $(OBJECTS_DIR)/nanotts.o   \
+    $(OBJECTS_DIR)/main.o      \
     $(OBJECTS_DIR)/wav.o       \
-    $(OBJECTS_DIR)/player_ao.o 
+    $(OBJECTS_DIR)/player_ao.o
 
-$(OBJECTS_DIR)/%.o: ./src/%.cpp 
-	g++ -D_PICO_LANG_DIR=\"/usr/share/pico/lang/\" -I. -I./svoxpico -Wall -g $(OPT_FLAG) -c $^ -o $@ 
+$(OBJECTS_DIR)/%.o: ./src/%.cpp
+	@#g++ -D_PICO_LANG_DIR=\"/usr/share/pico/lang/\" -I. -I./svoxpico -Wall -g $(OPT_FLAG) -c $^ -o $@
+	g++ -I. -I./svoxpico -Wall -g $(OPT_FLAG) -c $^ -o $@
 
 $(OBJECTS_DIR):
 	@[ -d $(OBJECTS_DIR) ] || mkdir $(OBJECTS_DIR)
@@ -31,7 +32,7 @@ clean:
 	@if [ -d $(OBJECTS_DIR) ]; then rmdir $(OBJECTS_DIR) ; fi
 	@echo "use \"make clean_all\" to also cleanup svoxpico directory"
 
-clean_all: clean
+distclean: clean
 	cd svoxpico; make clean ; ./clean.sh
 
 pico: $(PICO_LIBRARY)
