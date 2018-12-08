@@ -1,3 +1,14 @@
+NEW TODO 2018-12-07
+
+- make WAV output optional; stream PCM to audio device if no hardcopy
+- make libao detection dynamic
+- make lingware detection dynamic
+- all inputs and outputs should be explicitly specified.
+- make install
+- alsa? pulse audio?
+
+=============================================================================
+
 - playback keys: spacebar, left+right arrow, ESC, +/- (playback speed)
 - gprof, valgrind
 - write man page
@@ -6,19 +17,19 @@
 - look for more Lingware/voices. Are there proprietary ones?
 - submit to google code, other places
 
-X free() pico buffs, 
-X separate out playAudio class, 
-X add wav header code, 
+X free() pico buffs,
+X separate out playAudio class,
+X add wav header code,
 - extend playAudio class with possible modules
     - libmp3lame
-    - oggvorbis 
+    - oggvorbis
     - libfaad
     - flac
     - monkeys audio
 
 
 ==============================================================================
-- new design. due to the potentially large outputs, because output is in 16-bit WAV, 
+- new design. due to the potentially large outputs, because output is in 16-bit WAV,
 we are going to go with a design built around WRITING_FILES. and not just sending
 data in memory to PCM.  Due to this,
 
@@ -39,7 +50,7 @@ we need to have:
 
 - So we write these files; they set to a directory; the program knows where it wrote
 them. Then if we had told it to playback the result, it will just start loading them
-after the WAV generation is complete. It's neat and simple. We could also set it to 
+after the WAV generation is complete. It's neat and simple. We could also set it to
 delete the WAVS after it plays, but I think that we leave that to bash instead.
 
     - code to read common size suffix:
@@ -60,11 +71,11 @@ delete the WAVS after it plays, but I think that we leave that to bash instead.
 - 60 per minute                 16 * 16000 * 60     15360000 = 15-megabytes per minute
 - 60 per hour                   16 * 16000 * 3600   921600000 = not quite a gigabyte per hour
 -----------------------------------------------------------------------------
-Ok, I take it back,  the data space requirements are huge. We do need a codec. Since it's already 
-lo-fidelity spoken-word, you could just head straight for 32kbps mp3 as the target. 
+Ok, I take it back,  the data space requirements are huge. We do need a codec. Since it's already
+lo-fidelity spoken-word, you could just head straight for 32kbps mp3 as the target.
 
 of course, as usual, I know next to nothing about codecs--I should know more. the other thing
-is, you should be able to drop the object file into a folder and load it into the program, so 
+is, you should be able to drop the object file into a folder and load it into the program, so
 that I am not bound to one codec over another.
 
 ------------------------------------------------------------------
@@ -78,7 +89,7 @@ lightbulb idea!
 
 * What if you integrate a video game like sound mixer system in with the voice output
 * So that not only can you play back text, but you can format text in such a way that
-    small, unobtrusive sound-effects are inserted as cues. 
+    small, unobtrusive sound-effects are inserted as cues.
 * Better yet, you augment the markup style already supported in Pico <speed level=200>words</speed>
     but to include sound effects.  And you set the path at the beginning
     <meta sfxpath="/path/to/files">
