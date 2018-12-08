@@ -54,8 +54,12 @@ const char * PICO_LANG_DIR = "./lang/";
 const char * PICO_LANG_DIR = _PICO_LANG_DIR ;
 #endif
 
+#define GLOBAL_PREFIX "nanotts-output-"
+#define GLOBAL_SUFFIX ".wav"
+#define FILENAME_NUMBERING_LEADING_ZEROS 4
 
-// forward declaration
+// forward declarations
+int GetNextLowestFilenameNumber( const char * prefix, const char * suffix, int zeropad );
 class Nano;
 
 /*
@@ -226,20 +230,23 @@ class Nano
 {
 private:
     enum inputMode_t {
+        IN_NOT_SET,
         IN_STDIN,
         IN_CMDLINE_ARG,
+        IN_CMDLINE_TRAILING,
         IN_SINGLE_FILE,
         IN_MULTIPLE_FILES
     };
 
     enum outputMode_t {
-        OUT_STDOUT,
-        OUT_SINGLE_FILE,
-        OUT_MULTIPLE_FILES
+        OUT_NOT_SET         = 0,
+        OUT_STDOUT          = 1,
+        OUT_SINGLE_FILE     = 2,
+        OUT_MULTIPLE_FILES  = 4
     };
 
-    inputMode_t         in_mode;
-    outputMode_t        out_mode;
+    int                 in_mode;
+    int                 out_mode;
 
     const int           my_argc;
     const char **       my_argv;
@@ -247,7 +254,8 @@ private:
 
     char *              voice;
     char *              voicedir;
-    char *              prefix;
+    char                prefix[ 100 ];
+    char                suffix[ 100 ];
     char *              out_filename;
     char *              in_filename;
     char *              words;
@@ -262,7 +270,7 @@ private:
     mmfile_t *          mmfile;
 
     Listener<short>     stdout_processor;
-    void write_short_to_stdout( short *, unsigned int );
+    void                write_short_to_stdout( short *, unsigned int );
 
     Boilerplate         modifiers;
 
@@ -274,7 +282,8 @@ public:
 
     void PrintUsage();
     int check_args();
-    int setup_input_output() ;
+    int setup_input_output();
+    int verify_input_output();
 
     int getInput( unsigned char ** data, unsigned int * bytes );
     int playOutput();
@@ -287,12 +296,14 @@ public:
     Listener<short> * getListener() ;
 
     Boilerplate * getModifiers() ;
+
 };
 
 Nano::Nano( const int i, const char ** v ) : my_argc(i), my_argv(v), stdout_processor(this) {
     voice = 0;
     voicedir = 0;
-    prefix = 0;
+    sprintf( prefix, GLOBAL_PREFIX );
+    sprintf( suffix, GLOBAL_SUFFIX );
     out_filename = 0;
     in_filename = 0;
     words = 0;
@@ -301,7 +312,7 @@ Nano::Nano( const int i, const char ** v ) : my_argc(i), my_argv(v), stdout_proc
     input_buffer = 0;
     input_size = 0;
 
-    silence_output = false;
+    silence_output = true;
     stdout_processor.setCallback( &Nano::write_short_to_stdout );
 }
 
@@ -310,8 +321,6 @@ Nano::~Nano() {
         delete[] voice;
     if ( voicedir )
         delete[] voicedir;
-    if ( prefix )
-        delete[] prefix;
     if ( out_filename )
         delete[] out_filename;
     if ( in_filename )
@@ -350,42 +359,40 @@ void Nano::PrintUsage() {
     program = !program ? my_argv[0] : program + 1;
     this->exename = program;
 
-    printf( "usage: %s [options]\n\n", exename );
+    printf( "usage: %s [options]\n", exename );
 
     char line1[ 80 ];
     char line2[ 80 ];
     char line3[ 80 ];
     memset( line1, 0, 80 );
     memset( line2, 0, 80 );
-    sprintf( line1, "  %s -f <filename> -o file1.wav --no-play", exename );
-    sprintf( line2, "  echo \"Mary had a little lamb\" | %s", exename );
-    sprintf( line3, "  %s -w \"Once upon a midnight dreary\" -v en-US --speed 0.5 --pitch 0.5", exename );
+    sprintf( line1, "   %s -f <filename> -o file1.wav", exename );
+    sprintf( line2, "   echo \"Mary had a little lamb\" | %s --play", exename );
+    sprintf( line3, "   %s -i \"Once upon a midnight dreary\" -v en-US --speed 0.8 --pitch 1.8 -p", exename );
 
     struct help {
         const char *arg;
         const char *desc;
     } help_lines[] = {
-        { "  -h, --help", "displays this" },
-        { "  -v <voice>", "select voice. Default: en-GB" },
-        //{ "  -l <directory>", "Lingware voices directory. (default: \"./lang\")" },
-        { "  -l <directory>", "Lingware voices directory." },
-        { "  -w <words>", "words. must be correctly quoted." },
-        { "  -f <filename>", "filename to read input from" },
-//        { "  -p <prefix>", "write output to multiple numbered files with prefix" },
-        { "  -o <filename>", "write output to single file; overrides prefix" },
-        { "  --no-play|-m", "do NOT play output on PC's soundcard" },
-        { "  -c ", "send PCM output to stdout" },
-        { "  --speed <0.2-5.0>", "change voice speed" },
-        { "  --pitch <0.5-2.0>", "change voice pitch" },
-        { "  --volume <0.0-5.0>", "change voice volume (>1.0 may result in degraded quality)" },
+        { "   -h, --help", "Displays this help. (overrides other input)" },
+        { "   -v, --voice <voice>", "Select voice. (Default: en-GB)" },
+        { "   -l <directory>", "Set Lingware voices directory. (defaults: \"./lang\", \"/usr/share/pico/lang/\")" },
+        { "   -i <text>", "Input. (Text must be correctly quoted)" },
+        { "   -f <filename>", "Filename to read input from" },
+        { "   -o <filename>", "Write output to WAV/PCM file (enables WAV output)" },
+        { "   -w, --wav ", "Write output to WAV file, will generate filename if '-o' option not provided" },
+        { "   -p, --play ", "Play audio output" },
+        { "   -m, --no-play", "do NOT play output on PC's soundcard" },
+        { "   -c ", "Send raw PCM output to stdout" },
+        { "   --speed <0.2-5.0>", "change voice speed" },
+        { "   --pitch <0.5-2.0>", "change voice pitch" },
+        { "   --volume <0.0-5.0>", "change voice volume (>1.0 may result in degraded quality)" },
 //        { "  --files", "set multiple input files" },
         { " ", " " },
         { "Possible Voices: ", " " },
-        { " ", " " },
-        { "  en-US, en-GB, de-DE, es-ES, fr-FR, it-IT", " " },
+        { "   en-US, en-GB, de-DE, es-ES, fr-FR, it-IT", " " },
         { " ", " " },
         { "Examples: ", " " },
-        { " ", " " },
         { line1, " " },
         { line2, " " },
         { line3, " " },
@@ -414,9 +421,21 @@ char * Nano::copy_arg( int index )
 
 int Nano::check_args()
 {
-    // DEFAULTS
-    in_mode = IN_STDIN;
-    out_mode = OUT_SINGLE_FILE;
+    // inputs and especially output are explicit
+    in_mode = IN_NOT_SET;
+    out_mode = OUT_NOT_SET;
+    bool trailing_args = false;
+
+#define WARN_UNMATCHED_INPUTS() do{     \
+    if (trailing_args) {                \
+        fprintf(stderr," **warning: commandline switch: '%s' in trailing input\n",my_argv[i]);  \
+        break;                          \
+    }                                   \
+}while(0)
+
+    if ( ! isatty(fileno(stdin)) ) {
+        in_mode = IN_STDIN;
+    }
 
     for ( int i = 1; i < my_argc; i++ )
     {
@@ -427,19 +446,34 @@ int Nano::check_args()
         }
 
         // INPUTS
-        else if ( strcmp( my_argv[i], "-w" ) == 0 ) {
+        else if ( strcmp( my_argv[i], "-i" ) == 0 ) {
+            WARN_UNMATCHED_INPUTS();
+            if ( in_mode != IN_NOT_SET ) {
+                fprintf( stderr, " **error: multiple inputs\n\n" );
+                return -1;
+            }
             in_mode = IN_CMDLINE_ARG;
             if ( (words = copy_arg( i + 1 )) == 0 )
                 return -1;
             ++i;
         }
         else if ( strcmp( my_argv[i], "-f" ) == 0 ) {
+            WARN_UNMATCHED_INPUTS();
+            if ( in_mode != IN_NOT_SET ) {
+                fprintf( stderr, " **error: multiple inputs\n\n" );
+                return -1;
+            }
             in_mode = IN_SINGLE_FILE;
             if ( (in_filename = copy_arg( i + 1 )) == 0 )
                 return -1;
             ++i;
         }
         else if ( strcmp( my_argv[i], "--files" ) == 0 ) {
+            WARN_UNMATCHED_INPUTS();
+            if ( in_mode != IN_NOT_SET ) {
+                fprintf( stderr, " **error: multiple inputs\n\n" );
+                return -1;
+            }
             in_mode = IN_MULTIPLE_FILES;
             // FIXME: get array of char*filename
             if ( (in_filename = copy_arg( i + 1 )) == 0 )
@@ -447,34 +481,52 @@ int Nano::check_args()
             ++i;
         }
         else if ( strcmp( my_argv[i], "-" ) == 0 ) {
+            WARN_UNMATCHED_INPUTS();
+            if ( in_mode != IN_NOT_SET && in_mode != IN_STDIN ) {
+                fprintf( stderr, " **error: multiple inputs\n\n" );
+                return -1;
+            }
             in_mode = IN_STDIN;
             in_fp = stdin;
         }
 
         // OUTPUTS
         else if ( strcmp( my_argv[i], "-o" ) == 0 ) {
-            out_mode = OUT_SINGLE_FILE;
+            WARN_UNMATCHED_INPUTS();
+            out_mode |= OUT_SINGLE_FILE;
             if ( (out_filename = copy_arg( i + 1 )) == 0 )
                 return -1;
             ++i;
         }
-        else if ( strcmp( my_argv[i], "-p" ) == 0 ) {
-            out_mode = OUT_MULTIPLE_FILES;
-            if ( (prefix = copy_arg( i + 1 )) == 0 )
-                return -1;
-            ++i;
-        }
         else if ( strcmp( my_argv[i], "-c" ) == 0 ) {
-            out_mode = OUT_STDOUT;
+            WARN_UNMATCHED_INPUTS();
+            out_mode |= OUT_STDOUT;
+        }
+        else if ( strcmp( my_argv[i], "-w" ) == 0 || strcmp( my_argv[i], "--wav" ) == 0 ) {
+            WARN_UNMATCHED_INPUTS();
+            out_mode |= OUT_SINGLE_FILE;
+        }
+        else if ( strcmp( my_argv[i], "-m" ) == 0 || strcmp( my_argv[i], "--no-play" ) == 0 ) {
+            WARN_UNMATCHED_INPUTS();
+            silence_output = true;
+            //out_mode &= ~OUT_SINGLE_FILE;
+        }
+        else if ( strcmp( my_argv[i], "-p" ) == 0 || strcmp( my_argv[i], "--play" ) == 0 ) {
+            WARN_UNMATCHED_INPUTS();
+            silence_output = false;
+            out_mode |= OUT_SINGLE_FILE;
         }
 
+
         // SVOX
-        else if ( strcmp( my_argv[i], "-v" ) == 0 ) {
+        else if ( strcmp( my_argv[i], "-v" ) == 0 || strcmp( my_argv[i], "--voice" ) == 0 ) {
+            WARN_UNMATCHED_INPUTS();
             if ( (voice = copy_arg( i + 1 )) == 0 )
                 return -1;
             ++i;
         }
         else if ( strcmp( my_argv[i], "-l" ) == 0 ) {
+            WARN_UNMATCHED_INPUTS();
             if ( (voicedir = copy_arg( i + 1 )) == 0 )
                 return -1;
             fprintf( stderr, "Lingware directory: %s\n", voicedir );
@@ -482,22 +534,22 @@ int Nano::check_args()
         }
 
         // OTHER
-        else if ( strcmp( my_argv[i], "-m" ) == 0 || strcmp( my_argv[i], "--no-play" ) == 0 ) {
-            silence_output = true;
-        }
         else if ( strcmp( my_argv[i], "--speed" ) == 0 ) {
+            WARN_UNMATCHED_INPUTS();
             if ( i + 1 >= my_argc )
                 return -1;
             modifiers.setSpeed( strtof(my_argv[i+1], 0) );
             ++i;
         }
         else if ( strcmp( my_argv[i], "--pitch" ) == 0 ) {
+            WARN_UNMATCHED_INPUTS();
             if ( i + 1 >= my_argc )
                 return -1;
             modifiers.setPitch( strtof(my_argv[i+1], 0) );
             ++i;
         }
         else if ( strcmp( my_argv[i], "--volume" ) == 0 ) {
+            WARN_UNMATCHED_INPUTS();
             if ( i + 1 >= my_argc )
                 return -1;
             modifiers.setVolume( strtof(my_argv[i+1], 0) );
@@ -506,15 +558,23 @@ int Nano::check_args()
 
         // doesn't match any expected arguments; therefor try to speak it
         else {
-            words = copy_arg( i );
-            if ( IN_CMDLINE_ARG != in_mode ) {
-                fprintf( stderr, " * speaking non-matching input\n" );
+            if ( in_mode != IN_NOT_SET && in_mode != IN_CMDLINE_TRAILING ) {
+                fprintf( stderr, " **error: trailing commandline arguments\n\n" );
+                return -4;
             }
-            in_mode = IN_CMDLINE_ARG;
+
+            // TODO collect all valid straggling tersm and play them all, unquoted
+            trailing_args = true; // behavior changes once we encounter trailing arguments
+            words = copy_arg( i );
+            in_mode = IN_CMDLINE_TRAILING;
         }
     }
 
-    // post-DEFAULTS
+    if ( verify_input_output() < 0 ) {
+        return -3;
+    }
+
+    // DEFAULTS
     if ( !voice ) {
         voice = new char[6];
         strcpy( voice, "en-GB" );
@@ -525,16 +585,14 @@ int Nano::check_args()
         strcpy( voicedir, PICO_LANG_DIR );
     }
 
-    // FIXME: temporary
     if ( !out_filename ) {
-        out_filename = new char[20];
-        memset( out_filename, 0, 20 );
-        strcpy( out_filename, "nanotts-001.wav" );
-    }
-    if ( !prefix ) {
-        prefix = new char[20];
-        memset( prefix, 0, 20 );
-        strcpy( prefix, "nanotts-001" );
+        int tmpsize = 100;
+        out_filename = new char[ tmpsize ];
+        memset( out_filename, 0, tmpsize );
+        int next = GetNextLowestFilenameNumber( prefix, suffix, FILENAME_NUMBERING_LEADING_ZEROS );
+        char fmt[ 32 ];
+        sprintf( fmt, "%%s%%0%dd%%s", FILENAME_NUMBERING_LEADING_ZEROS );
+        sprintf( out_filename, fmt, prefix, next, suffix );
     }
 
     //
@@ -558,7 +616,7 @@ int Nano::setup_input_output()
             in_fp = stdin;
         } else {
             if ( !words ) {
-                fprintf( stderr, " **error: reading from stdin.  (try -h for help)\n" );
+                fprintf( stderr, " **error: reading from stdin.\n\n" );
                 return -1;
             }
         }
@@ -567,8 +625,10 @@ int Nano::setup_input_output()
         // mmap elsewhere
         break;
     case IN_CMDLINE_ARG:
+    case IN_CMDLINE_TRAILING:
         break;
     case IN_MULTIPLE_FILES:
+        __NOT_IMPL__
     default:
         __NOT_IMPL__
         break;
@@ -582,12 +642,27 @@ int Nano::setup_input_output()
         fprintf( stderr, "writing pcm stream to stdout\n" );
         break;
     case OUT_MULTIPLE_FILES:
+        __NOT_IMPL__
     default:
         __NOT_IMPL__
         break;
     }
 
 #undef __NOT_IMPL__
+    return 0;
+}
+
+int Nano::verify_input_output() {
+    if ( in_mode == IN_NOT_SET ) {
+        fprintf( stderr, " **error: no input\n\n" );
+        return -1;
+    }
+
+    if ( out_mode == OUT_NOT_SET ) {
+        fprintf( stderr, " **error: no output mode selected\n\n" );
+        return -2;
+    }
+
     return 0;
 }
 
@@ -611,10 +686,14 @@ int Nano::getInput( unsigned char ** data, unsigned int * bytes )
         fprintf( stderr, "read: %u bytes from \"%s\"\n", mmfile->size, in_filename );
         break;
     case IN_CMDLINE_ARG:
+    case IN_CMDLINE_TRAILING:
         *data = (unsigned char *)words;
         *bytes = strlen(words) + 1; /* 1 additional for terminating '\0' */
         fprintf( stderr, "read: %u bytes from command line\n", *bytes );
         break;
+    case IN_MULTIPLE_FILES:
+        fprintf( stderr, "multiple files not supported\n" );
+        return -1;
     default:
         fprintf( stderr, "unknown input\n" );
         return -1;
@@ -627,8 +706,6 @@ int Nano::getInput( unsigned char ** data, unsigned int * bytes )
 int Nano::playOutput()
 {
     if ( silence_output )
-        return 0;
-    if ( out_mode == OUT_STDOUT )
         return 0;
 
     return 1;
@@ -643,12 +720,12 @@ const char * Nano::getPath() {
 }
 
 void Nano::write_short_to_stdout( short * data, unsigned int shorts ) {
-    if ( out_mode == OUT_STDOUT )
+    if ( out_mode | OUT_STDOUT )
         fwrite( data, 2, shorts, out_fp );
 }
 
 Listener<short> * Nano::getListener() {
-    if ( out_mode != OUT_STDOUT )
+    if ( out_mode | OUT_STDOUT )
         return 0;
     return &stdout_processor;
 }
@@ -860,7 +937,7 @@ int Pico::initializeSystem()
 
     if ( (ret = pico_initialize( picoMemArea, PICO_MEM_SIZE, &picoSystem )) ) {
         pico_getSystemStatusMessage(picoSystem, ret, outMessage);
-        fprintf(stderr, "Cannot initialize pico (%i): %s\n", ret, outMessage);
+        fprintf( stderr, "Cannot initialize pico (%i): %s\n", ret, outMessage );
 
         pico_terminate(&picoSystem);
         picoSystem = 0;
@@ -886,7 +963,7 @@ int Pico::initializeSystem()
     // attempt to load it
     if ( (ret = pico_loadResource(picoSystem, picoTaFileName, &picoTaResource)) ) {
         pico_getSystemStatusMessage(picoSystem, ret, outMessage);
-        fprintf(stderr, "Cannot load text analysis resource file (%i): %s\n", ret, outMessage);
+        fprintf( stderr, "Cannot load text analysis resource file (%i): %s\n", ret, outMessage );
         goto unloadTaResource;
     }
 
@@ -898,7 +975,7 @@ int Pico::initializeSystem()
 
     if ( (ret = pico_loadResource(picoSystem, picoSgFileName, &picoSgResource)) ) {
         pico_getSystemStatusMessage(picoSystem, ret, outMessage);
-        fprintf(stderr, "Cannot load signal generation Lingware resource file (%i): %s\n", ret, outMessage);
+        fprintf( stderr, "Cannot load signal generation Lingware resource file (%i): %s\n", ret, outMessage );
         goto unloadSgResource;
     }
 
@@ -906,7 +983,7 @@ int Pico::initializeSystem()
     picoTaResourceName = (pico_Char *) malloc( PICO_MAX_RESOURCE_NAME_SIZE );
     if((ret = pico_getResourceName( picoSystem, picoTaResource, (char *) picoTaResourceName ))) {
         pico_getSystemStatusMessage(picoSystem, ret, outMessage);
-        fprintf(stderr, "Cannot get the text analysis resource name (%i): %s\n", ret, outMessage);
+        fprintf( stderr, "Cannot get the text analysis resource name (%i): %s\n", ret, outMessage );
         goto unloadSgResource;
     }
 
@@ -914,35 +991,35 @@ int Pico::initializeSystem()
     picoSgResourceName = (pico_Char *) malloc( PICO_MAX_RESOURCE_NAME_SIZE );
     if((ret = pico_getResourceName( picoSystem, picoSgResource, (char *) picoSgResourceName ))) {
         pico_getSystemStatusMessage(picoSystem, ret, outMessage);
-        fprintf(stderr, "Cannot get the signal generation resource name (%i): %s\n", ret, outMessage);
+        fprintf( stderr, "Cannot get the signal generation resource name (%i): %s\n", ret, outMessage );
         goto unloadSgResource;
     }
 
     /* Create a voice definition.   */
     if((ret = pico_createVoiceDefinition( picoSystem, (const pico_Char *) picoVoiceName ))) {
         pico_getSystemStatusMessage(picoSystem, ret, outMessage);
-        fprintf(stderr, "Cannot create voice definition (%i): %s\n", ret, outMessage);
+        fprintf( stderr, "Cannot create voice definition (%i): %s\n", ret, outMessage );
         goto unloadSgResource;
     }
 
     /* Add the text analysis resource to the voice. */
     if((ret = pico_addResourceToVoiceDefinition( picoSystem, (const pico_Char *) picoVoiceName, picoTaResourceName ))) {
         pico_getSystemStatusMessage(picoSystem, ret, outMessage);
-        fprintf(stderr, "Cannot add the text analysis resource to the voice (%i): %s\n", ret, outMessage);
+        fprintf( stderr, "Cannot add the text analysis resource to the voice (%i): %s\n", ret, outMessage );
         goto unloadSgResource;
     }
 
     /* Add the signal generation resource to the voice. */
     if((ret = pico_addResourceToVoiceDefinition( picoSystem, (const pico_Char *) picoVoiceName, picoSgResourceName ))) {
         pico_getSystemStatusMessage(picoSystem, ret, outMessage);
-        fprintf(stderr, "Cannot add the signal generation resource to the voice (%i): %s\n", ret, outMessage);
+        fprintf( stderr, "Cannot add the signal generation resource to the voice (%i): %s\n", ret, outMessage );
         goto unloadSgResource;
     }
 
     /* Create a new Pico engine. */
     if((ret = pico_newEngine( picoSystem, (const pico_Char *) picoVoiceName, &picoEngine ))) {
         pico_getSystemStatusMessage(picoSystem, ret, outMessage);
-        fprintf(stderr, "Cannot create a new pico engine (%i): %s\n", ret, outMessage);
+        fprintf( stderr, "Cannot create a new pico engine (%i): %s\n", ret, outMessage );
         goto disposeEngine;
     }
 
@@ -1049,7 +1126,7 @@ int Pico::process()
     if ( 0 == listener ) {
         picoos_Common common = (picoos_Common) pico_sysGetCommon(picoSystem);
         if ( TRUE != (done=picoos_sdfOpenOut(common, &sdOutFile, (picoos_char *)out_filename, SAMPLE_FREQ_16KHZ, PICOOS_ENC_LIN)) ) {
-            fprintf(stderr, "Cannot open output wave file\n");
+            fprintf( stderr, "Cannot open output wave file\n" );
             return -1;
         }
     }
@@ -1094,7 +1171,7 @@ int Pico::process()
         /* Feed the text into the engine.   */
         if ( (ret = pico_putTextUtf8(picoEngine, inp, text_remaining, &bytes_sent)) ) {
             pico_getSystemStatusMessage(picoSystem, ret, outMessage);
-            fprintf(stderr, "Cannot put Text (%i): %s\n", ret, outMessage);
+            fprintf( stderr, "Cannot put Text (%i): %s\n", ret, outMessage );
             return -2;
         }
 
@@ -1107,7 +1184,7 @@ int Pico::process()
             getstatus = pico_getData( picoEngine, (void *) outbuf, MAX_OUTBUF_SIZE, &bytes_recv, &out_data_type );
             if ( (getstatus !=PICO_STEP_BUSY) && (getstatus !=PICO_STEP_IDLE) ) {
                 pico_getSystemStatusMessage(picoSystem, getstatus, outMessage);
-                fprintf(stderr, "Cannot get Data (%i): %s\n", getstatus, outMessage);
+                fprintf( stderr, "Cannot get Data (%i): %s\n", getstatus, outMessage );
                 return -4;
             }
 
@@ -1151,10 +1228,8 @@ int Pico::process()
         sdOutFile = 0;
 
         // report
-        if ( !strstr( out_filename, "nanotts" ) ) {
-            int bytes = fileSize( out_filename );
-            fprintf( stderr, "wrote \"%s\" (%d bytes)\n", out_filename, bytes );
-        }
+        int bytes = fileSize( out_filename );
+        fprintf( stderr, "wrote \"%s\" (%d bytes)\n", out_filename, bytes );
     }
 
     return bufused;
@@ -1263,6 +1338,14 @@ int main( int argc, const char ** argv )
     //
     if ( nano.check_args() < 0 ) {
         nano.destroy();
+        nano.PrintUsage();
+        return 127; // command not found
+    }
+
+    //
+    if ( !nano.outFilename() && !nano.getListener() ) {
+        fprintf( stderr, "No possible output\n\n" );
+        nano.PrintUsage();
         return 127; // command not found
     }
 
@@ -1318,3 +1401,11 @@ int main( int argc, const char ** argv )
     return 0;
 }
 
+/*
+
+check all inputs and outputs, if no outputs are specified, print message warning with available options
+
+same for inputs, check first STDIN, then COMMAND_LINE_SWITCH_-i (overrides trailing), then trailing.
+stdin overrides -i, -i overrides trailing, ... but for each should warn. what if we pass -i, and stdin? then should ERROR and print better help
+
+*/
