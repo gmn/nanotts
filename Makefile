@@ -5,6 +5,8 @@ CFLAGS =
 CFLAGS_DEBUG = -g
 CFLAGS_OPT = -O2
 SHELL := /bin/bash
+PICO_LANG_ROOT := /usr/share/pico
+PICO_LANG_LOCATION := $(PICO_LANG_ROOT)/lang/
 
 all: $(PROGRAM)
 
@@ -27,7 +29,6 @@ endif
 
 
 $(OBJECTS_DIR)/%.o: ./src/%.cpp
-	@#g++ -D_PICO_LANG_DIR=\"/usr/share/pico/lang/\" -I. -I./svoxpico -Wall -g $(OPT_FLAG) -c $^ -o $@
 	g++ -I. -I./svoxpico -Wall $(CFLAGS) -c $^ -o $@
 
 $(OBJECTS_DIR):
@@ -55,3 +56,12 @@ pico: $(PICO_LIBRARY)
 	gcc -I./svoxpico -Wall -g $(OPT_FLAG) pico2wave.o svoxpico/.libs/libttspico.a -o pico2wave -lm -lpopt
 
 both: $(PROGRAM) pico
+
+install: $(PROGRAM)
+	install -m 0755 $(PROGRAM) /usr/bin/
+	@if [ ! -d $(PICO_LANG_LOCATION) ]; then echo mkdir -p -m 777 $(PICO_LANG_LOCATION); mkdir -p -m 777 $(PICO_LANG_LOCATION); fi
+	@for file in ./lang/* ; do echo install -m 0644 $${file} $(PICO_LANG_LOCATION); install -m 0644 $${file} $(PICO_LANG_LOCATION); done
+
+uninstall:
+	@if [ -e /usr/bin/$(PROGRAM) ]; then echo rm /usr/bin/$(PROGRAM); rm /usr/bin/$(PROGRAM); fi
+	@if [ -e $(PICO_LANG_ROOT) ]; then echo rm -rf $(PICO_LANG_ROOT); rm -rf $(PICO_LANG_ROOT) ; fi

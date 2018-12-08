@@ -428,7 +428,7 @@ int Nano::check_args()
 
 #define WARN_UNMATCHED_INPUTS() do{     \
     if (trailing_args) {                \
-        fprintf(stderr," **warning: commandline switch: '%s' in trailing input\n",my_argv[i]);  \
+        fprintf(stderr," **warning: commandline switch: '%s' in trailing inputs\n",my_argv[i]);  \
         break;                          \
     }                                   \
 }while(0)
@@ -529,7 +529,7 @@ int Nano::check_args()
             WARN_UNMATCHED_INPUTS();
             if ( (voicedir = copy_arg( i + 1 )) == 0 )
                 return -1;
-            fprintf( stderr, "Lingware directory: %s\n", voicedir );
+            fprintf( stderr, "Using Lingware directory: %s\n", voicedir );
             ++i;
         }
 
