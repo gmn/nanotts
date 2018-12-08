@@ -431,17 +431,20 @@ int Nano::check_args()
             in_mode = IN_CMDLINE_ARG;
             if ( (words = copy_arg( i + 1 )) == 0 )
                 return -1;
+            ++i;
         }
         else if ( strcmp( my_argv[i], "-f" ) == 0 ) {
             in_mode = IN_SINGLE_FILE;
             if ( (in_filename = copy_arg( i + 1 )) == 0 )
                 return -1;
+            ++i;
         }
         else if ( strcmp( my_argv[i], "--files" ) == 0 ) {
             in_mode = IN_MULTIPLE_FILES;
             // FIXME: get array of char*filename
             if ( (in_filename = copy_arg( i + 1 )) == 0 )
                 return -1;
+            ++i;
         }
         else if ( strcmp( my_argv[i], "-" ) == 0 ) {
             in_mode = IN_STDIN;
@@ -453,11 +456,13 @@ int Nano::check_args()
             out_mode = OUT_SINGLE_FILE;
             if ( (out_filename = copy_arg( i + 1 )) == 0 )
                 return -1;
+            ++i;
         }
         else if ( strcmp( my_argv[i], "-p" ) == 0 ) {
             out_mode = OUT_MULTIPLE_FILES;
             if ( (prefix = copy_arg( i + 1 )) == 0 )
                 return -1;
+            ++i;
         }
         else if ( strcmp( my_argv[i], "-c" ) == 0 ) {
             out_mode = OUT_STDOUT;
@@ -467,11 +472,13 @@ int Nano::check_args()
         else if ( strcmp( my_argv[i], "-v" ) == 0 ) {
             if ( (voice = copy_arg( i + 1 )) == 0 )
                 return -1;
+            ++i;
         }
         else if ( strcmp( my_argv[i], "-l" ) == 0 ) {
             if ( (voicedir = copy_arg( i + 1 )) == 0 )
                 return -1;
             fprintf( stderr, "Lingware directory: %s\n", voicedir );
+            ++i;
         }
 
         // OTHER
@@ -482,16 +489,19 @@ int Nano::check_args()
             if ( i + 1 >= my_argc )
                 return -1;
             modifiers.setSpeed( strtof(my_argv[i+1], 0) );
+            ++i;
         }
         else if ( strcmp( my_argv[i], "--pitch" ) == 0 ) {
             if ( i + 1 >= my_argc )
                 return -1;
             modifiers.setPitch( strtof(my_argv[i+1], 0) );
+            ++i;
         }
         else if ( strcmp( my_argv[i], "--volume" ) == 0 ) {
             if ( i + 1 >= my_argc )
                 return -1;
             modifiers.setVolume( strtof(my_argv[i+1], 0) );
+            ++i;
         }
 
         // doesn't match any expected arguments; therefor try to speak it
@@ -1253,7 +1263,7 @@ int main( int argc, const char ** argv )
     //
     if ( nano.check_args() < 0 ) {
         nano.destroy();
-        return -1;
+        return 127; // command not found
     }
 
     //
@@ -1261,24 +1271,30 @@ int main( int argc, const char ** argv )
     unsigned int    length  = 0;
     if ( nano.getInput( &words, &length ) < 0 ) {
         nano.destroy();
-        return -3;
+        return 65; // data format error
     }
 
     //
     PicoSingleton & pico = PicoSingleton::instance();
     pico.setPath( nano.getPath() );
     pico.setOutFilename( nano.outFilename() );
+
     if ( pico.setVoice( nano.getVoice() ) < 0 ) {
         fprintf( stderr, "set voice failed, with: \"%s\n\"", nano.getVoice() );
-        goto early_exit;
+        pico.destroy();
+        nano.destroy();
+        return 127; // command not found
     }
+
     pico.setListener( nano.getListener() );
     pico.addModifiers( nano.getModifiers() );
 
     //
     if ( pico.initializeSystem() < 0 ) {
         fprintf( stderr, " * problem initializing Svox Pico\n" );
-        goto early_exit;
+        pico.destroy();
+        nano.destroy();
+        return 126; // command found but not executable
     }
 
     //
@@ -1297,8 +1313,8 @@ int main( int argc, const char ** argv )
         delete player;
     }
 
-early_exit:
     pico.destroy();
     nano.destroy();
+    return 0;
 }
 

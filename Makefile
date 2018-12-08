@@ -15,7 +15,8 @@ OBJECTS = \
     $(OBJECTS_DIR)/player_ao.o
 
 $(OBJECTS_DIR)/%.o: ./src/%.cpp
-	g++ -D_PICO_LANG_DIR=\"/usr/share/pico/lang/\" -I. -I./svoxpico -Wall -g $(OPT_FLAG) -c $^ -o $@
+	@#g++ -D_PICO_LANG_DIR=\"/usr/share/pico/lang/\" -I. -I./svoxpico -Wall -g $(OPT_FLAG) -c $^ -o $@
+	g++ -I. -I./svoxpico -Wall -g $(OPT_FLAG) -c $^ -o $@
 
 $(OBJECTS_DIR):
 	@[ -d $(OBJECTS_DIR) ] || mkdir $(OBJECTS_DIR)
