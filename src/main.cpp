@@ -88,6 +88,7 @@ public:
 
     void writeData( type * data, unsigned int byte_size );
     void setCallback( void (Nano::*con_f)( short *, unsigned int ), Nano* =0 ) ;
+    bool hasConsumer();
 };
 
 template <typename type>
@@ -103,6 +104,11 @@ void Listener<type>::setCallback( void (Nano::*con_f)( short *, unsigned int ), 
     this->consume = con_f;
     if ( nano_class )
         this->nano_class = nano_class;
+}
+
+template <typename type>
+bool Listener<type>::hasConsumer() {
+    return consume != 0;
 }
 //////////////////////////////////////////////////////////////////
 
@@ -245,7 +251,8 @@ private:
         OUT_NOT_SET         = 0,
         OUT_STDOUT          = 1,
         OUT_SINGLE_FILE     = 2,
-        OUT_MULTIPLE_FILES  = 4
+        OUT_PLAYBACK        = 4,
+        OUT_MULTIPLE_FILES  = 8
     };
 
     int                 in_mode;
@@ -272,10 +279,14 @@ private:
 
     mmfile_t *          mmfile;
 
-    Listener<short>     stdout_processor;
+    Listener<short>     listener;
     void                write_short_to_stdout( short *, unsigned int );
+    void                write_short_to_playback( short * data, unsigned int shorts );
+    void                write_short_to_playback_and_stdout( short * data, unsigned int shorts );
 
     Boilerplate         modifiers;
+
+    AudioPlayer_AO      streamPlayer;
 
 public:
     bool                silence_output;
@@ -300,9 +311,14 @@ public:
 
     Boilerplate * getModifiers() ;
 
+    void SetListenerStdout();
+    void SetListenerPlayback();
+    void SetListenerPlaybackAndStdout();
+
+    bool writingWaveFile() { return (out_mode & OUT_SINGLE_FILE)==OUT_SINGLE_FILE; }
 };
 
-Nano::Nano( const int i, const char ** v ) : my_argc(i), my_argv(v), stdout_processor(this) {
+Nano::Nano( const int i, const char ** v ) : my_argc(i), my_argv(v), listener(this) {
     voice = 0;
     langfiledir = 0;
     sprintf( prefix, GLOBAL_PREFIX );
@@ -316,7 +332,6 @@ Nano::Nano( const int i, const char ** v ) : my_argc(i), my_argv(v), stdout_proc
     input_size = 0;
 
     silence_output = true;
-    stdout_processor.setCallback( &Nano::write_short_to_stdout );
 }
 
 Nano::~Nano() {
@@ -512,12 +527,12 @@ int Nano::check_args()
         else if ( strcmp( my_argv[i], "-m" ) == 0 || strcmp( my_argv[i], "--no-play" ) == 0 ) {
             WARN_UNMATCHED_INPUTS();
             silence_output = true;
-            //out_mode &= ~OUT_SINGLE_FILE;
+            out_mode &= ~OUT_PLAYBACK;
         }
         else if ( strcmp( my_argv[i], "-p" ) == 0 || strcmp( my_argv[i], "--play" ) == 0 ) {
             WARN_UNMATCHED_INPUTS();
             silence_output = false;
-            out_mode |= OUT_SINGLE_FILE;
+            out_mode |= OUT_PLAYBACK;
         }
 
 
@@ -566,7 +581,7 @@ int Nano::check_args()
                 return -4;
             }
 
-            // TODO collect all valid straggling tersm and play them all, unquoted
+            // TODO: collect the valid straggling terms and concat them together
             trailing_args = true; // behavior changes once we encounter trailing arguments
             words = copy_arg( i );
             in_mode = IN_CMDLINE_TRAILING;
@@ -660,18 +675,32 @@ int Nano::setup_input_output()
         break;
     };
 
-    switch ( out_mode ) {
-    case OUT_SINGLE_FILE:
-        break;
-    case OUT_STDOUT:
-        out_fp = stdout;
-        fprintf( stderr, "writing pcm stream to stdout\n" );
-        break;
-    case OUT_MULTIPLE_FILES:
-        __NOT_IMPL__
-    default:
-        __NOT_IMPL__
-        break;
+    int modes[] = { OUT_STDOUT, OUT_SINGLE_FILE, OUT_PLAYBACK, OUT_MULTIPLE_FILES };
+    for ( int i = 0; i < 4; ++i ) {
+        int test_mode = modes[i] & out_mode;
+        switch ( test_mode ) {
+        case OUT_SINGLE_FILE:
+            break;
+        case OUT_PLAYBACK:
+            break;
+        case OUT_STDOUT:
+            out_fp = stdout;
+            fprintf( stderr, "writing pcm stream to stdout\n" );
+            break;
+        case OUT_MULTIPLE_FILES:
+            __NOT_IMPL__
+            break;
+        default:
+            break;
+        }
+    }
+
+    if ( (out_mode & (OUT_PLAYBACK|OUT_STDOUT)) == (OUT_PLAYBACK|OUT_STDOUT) ) {
+        SetListenerPlaybackAndStdout();
+    } else if ( out_mode & OUT_PLAYBACK ) {
+        SetListenerPlayback();
+    } else if ( out_mode & OUT_STDOUT ) {
+        SetListenerStdout();
     }
 
 #undef __NOT_IMPL__
@@ -690,6 +719,20 @@ int Nano::verify_input_output() {
     }
 
     return 0;
+}
+
+void Nano::SetListenerStdout() {
+    listener.setCallback( &Nano::write_short_to_stdout );
+}
+void Nano::SetListenerPlayback() {
+    streamPlayer.DefaultPCMFormat();
+    streamPlayer.pcmSetup();
+    listener.setCallback( &Nano::write_short_to_playback );
+}
+void Nano::SetListenerPlaybackAndStdout() {
+    streamPlayer.DefaultPCMFormat();
+    streamPlayer.pcmSetup();
+    listener.setCallback( &Nano::write_short_to_playback_and_stdout );
 }
 
 // puts input into *data, and number_bytes into bytes
@@ -746,14 +789,26 @@ const char * Nano::getLangFilePath() {
 }
 
 void Nano::write_short_to_stdout( short * data, unsigned int shorts ) {
-    if ( out_mode | OUT_STDOUT )
+    if ( out_mode & OUT_STDOUT )
         fwrite( data, 2, shorts, out_fp );
 }
 
+void Nano::write_short_to_playback( short * data, unsigned int shorts ) {
+    if ( out_mode & OUT_PLAYBACK )
+        streamPlayer.pcmPlay( (char*)data, shorts * 2 );
+}
+
+void Nano::write_short_to_playback_and_stdout( short * data, unsigned int shorts ) {
+    if ( out_mode & OUT_STDOUT )
+        fwrite( data, 2, shorts, out_fp );
+    if ( out_mode & OUT_PLAYBACK )
+        streamPlayer.pcmPlay( (char*)data, shorts * 2 );
+}
+
 Listener<short> * Nano::getListener() {
-    if ( out_mode | OUT_STDOUT )
+    if ( !listener.hasConsumer() )
         return 0;
-    return &stdout_processor;
+    return &listener;
 }
 
 Boilerplate * Nano::getModifiers() {
@@ -883,6 +938,7 @@ private:
     pico_Char *         picoSgFileName;
     pico_Char *         picoTaResourceName;
     pico_Char *         picoSgResourceName;
+    bool                pico_writeWavPcm;
 
 public:
     Pico() ;
@@ -900,30 +956,33 @@ public:
     int fileSize( const char * filename ) ;
     void setListener( Listener<short> * );
     void addModifiers( Boilerplate * );
+    void writeWavePcm( bool new_setting = true ) { pico_writeWavPcm = new_setting; }
 };
 
 
 Pico::Pico() {
-    picoSystem          = 0;
-    picoTaResource      = 0;
-    picoSgResource      = 0;
-    picoEngine          = 0;
-    sdOutFile           = 0;
-    picoLingwarePath    = 0;
-    out_filename        = 0;
+    picoSystem              = 0;
+    picoTaResource          = 0;
+    picoSgResource          = 0;
+    picoEngine              = 0;
+    sdOutFile               = 0;
+    picoLingwarePath        = 0;
+    out_filename            = 0;
 
     strcpy( picoVoiceName, "PicoVoice" );
 
-    total_text_length   = 0;
-    text_remaining      = 0;
-    listener            = 0;
-    modifiers           = 0;
+    total_text_length       = 0;
+    text_remaining          = 0;
+    listener                = 0;
+    modifiers               = 0;
 
     picoMemArea             = 0;
     picoTaFileName          = 0;
     picoSgFileName          = 0;
     picoTaResourceName      = 0;
     picoSgResourceName      = 0;
+
+    pico_writeWavPcm        = false;
 }
 
 Pico::~Pico() {
@@ -1149,7 +1208,7 @@ int Pico::process()
     memset( pcm_buffer, 0, PCM_BUFFER_SIZE );
 
     // open output WAVE/PCM for writing
-    if ( 0 == listener ) {
+    if ( pico_writeWavPcm ) {
         picoos_Common common = (picoos_Common) pico_sysGetCommon(picoSystem);
         if ( TRUE != (done=picoos_sdfOpenOut(common, &sdOutFile, (picoos_char *)out_filename, SAMPLE_FREQ_16KHZ, PICOOS_ENC_LIN)) ) {
             fprintf( stderr, "Cannot open output wave file\n" );
@@ -1225,9 +1284,11 @@ int Pico::process()
                 /* or write the buffer to wavefile, and retrieve any leftover decoding bytes */
                 else
                 {
-                    if ( 0 == listener ) {
+                    if ( pico_writeWavPcm ) {
                         done = picoos_sdfPutSamples( sdOutFile, bufused / 2, (picoos_int16*) pcm_buffer );
-                    } else {
+                    }
+
+                    if ( listener ) {
                         listener->writeData( (short*)pcm_buffer, bufused/2 );
                     }
 
@@ -1240,9 +1301,11 @@ int Pico::process()
         } while (PICO_STEP_BUSY == getstatus);
 
         /* This chunk of synthesis is finished; pass the remaining samples. */
-        if ( 0 == listener ) {
+        if ( pico_writeWavPcm ) {
             done = picoos_sdfPutSamples( sdOutFile, bufused / 2, (picoos_int16*) pcm_buffer );
-        } else {
+        }
+
+        if ( listener ) {
             listener->writeData( (short*)pcm_buffer, bufused/2 );
         }
     }
@@ -1388,6 +1451,9 @@ int main( int argc, const char ** argv )
         return 127; // command not found
     }
 
+    if ( nano.writingWaveFile() ) {
+        pico.writeWavePcm();
+    }
     pico.setListener( nano.getListener() );
     pico.addModifiers( nano.getModifiers() );
 
@@ -1409,11 +1475,11 @@ int main( int argc, const char ** argv )
     pico.cleanup();
 
     //
-    if ( nano.playOutput() ) {
-        AudioPlayer_AO * player = new AudioPlayer_AO();
-        player->OpenAndPlay( nano.outFilename() );
-        delete player;
-    }
+//    if ( nano.playOutput() ) {
+//        AudioPlayer_AO * player = new AudioPlayer_AO();
+//        player->OpenAndPlay( nano.outFilename() );
+//        delete player;
+//    }
 
     pico.destroy();
     nano.destroy();

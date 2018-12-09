@@ -4,8 +4,8 @@ X all inputs and outputs should be explicitly specified.
     x WAV output optional
     x PLAYBACK optional, must be explicit
 X make install, make uninstall
-
-- dynamic lingware detection    (install won't really work without this)
+X dynamic lingware detection    (install won't really work without this)
+X PLAYBACK: stream PCM to audio device instead of writing file and reading it
 
 - make libao detection dynamic
     - compile player_ao as a dynamic lib
@@ -13,7 +13,6 @@ X make install, make uninstall
     - loader function that if dlopen("ao") succeeds, calls dlopen("player_ao") to load player class
     - PlayFile() wrapper that can send bytes to multiple Output modules
 
-- PLAYBACK: stream PCM to audio device instead of writing file and reading it
 - Windows Support
 
 - alsa? pulse audio?

@@ -9,7 +9,7 @@
     AudioPlayer_AO methods
 ================================================
 */
-AudioPlayer_AO::AudioPlayer_AO() : pcm_device(0), pcm_driver(0) 
+AudioPlayer_AO::AudioPlayer_AO() : pcm_device(0), pcm_driver(0)
 {
     memset( &pcm_format, 0xbcbcbcbc, sizeof(pcm_format) );
 }
@@ -48,7 +48,7 @@ void AudioPlayer_AO::pcmShutdown() {
     pcm_device = 0;
 }
 
-void AudioPlayer_AO::OpenWavAndPlay( const char * filename ) 
+void AudioPlayer_AO::OpenWavAndPlay( const char * filename )
 {
     // open the audio file
     mmfile_t * mmap_wav = new mmfile_t( filename );
@@ -61,7 +61,7 @@ void AudioPlayer_AO::OpenWavAndPlay( const char * filename )
     // read header meta info
     int offset = getPcmFormat( mmap_wav->data, mmap_wav->size );
 
-    // initialize system audio 
+    // initialize system audio
     pcmSetup();
 
     // start playing at beginning of PCM samples
@@ -76,7 +76,7 @@ void AudioPlayer_AO::OpenWavAndPlay( const char * filename )
     pcmShutdown();
 }
 
-int AudioPlayer_AO::getPcmFormat( unsigned char * data, unsigned int length ) 
+int AudioPlayer_AO::getPcmFormat( unsigned char * data, unsigned int length )
 {
     struct wavinfo_t wavinfo;
     GetWavInfo( data, length, &wavinfo );
@@ -97,4 +97,13 @@ void AudioPlayer_AO::OpenAndPlay( const char * filename )
     // FIXME: put file-type detection here. do by extension and send files to different codec handlers
 
     this->OpenWavAndPlay( filename );
+}
+
+void AudioPlayer_AO::DefaultPCMFormat() {
+//{bits = 16, rate = 16000, channels = 1, byte_format = 1, matrix = 0x0}
+    pcm_format.bits         = 16;
+    pcm_format.rate         = 16000;
+    pcm_format.channels     = 1;
+    pcm_format.byte_format  = 1;
+    pcm_format.matrix       = 0x0;
 }

@@ -22,6 +22,8 @@ public:
     void OpenAndPlay( const char * );
 
     int  getPcmFormat( unsigned char *, unsigned int );
+
+    void DefaultPCMFormat();
 };
 
 #endif /* __PLAYER_AO_H__ */
