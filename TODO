@@ -1,5 +1,19 @@
 NEW TODO 2018-12-07
 
+- write Alsa module
+- add ./configure script that detects alsa, --enable-alsa, --disable-alsa,
+- write a Dummy Interface, Alsa exports this interface, the configure script determines
+    which one to build. The main code always calls "SubmitSamples()", the dummy
+    does nothing, Alsa plays the samples.
+- --version flag reports the MAJOR.MINOR.PATH and OUTPUT_MODULE_LINKED_IN
+- gprof, valgrind
+- write man page
+
+- Windows Support
+- alsa? pulse audio?
+
+
+
 X all inputs and outputs should be explicitly specified.
     x WAV output optional
     x PLAYBACK optional, must be explicit
@@ -13,13 +27,12 @@ X PLAYBACK: stream PCM to audio device instead of writing file and reading it
     - loader function that if dlopen("ao") succeeds, calls dlopen("player_ao") to load player class
     - PlayFile() wrapper that can send bytes to multiple Output modules
 
-- Windows Support
-
-- alsa? pulse audio?
-
 =============================================================================
 
 - playback keys: spacebar, left+right arrow, ESC, +/- (playback speed)
+- some kind of playback callback that returns a number, a percentage counter of how far
+    we are in the playback, for instance, if there are 110,000 samples, it returns the
+    last sample number, so we can ... write other software and display a progress bar.
 - gprof, valgrind
 - write man page
 - autonaming func

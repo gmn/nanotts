@@ -379,14 +379,18 @@ void Nano::PrintUsage() {
 
     printf( "usage: %s [options]\n", exename );
 
-    char line1[ 80 ];
-    char line2[ 80 ];
-    char line3[ 80 ];
-    memset( line1, 0, 80 );
-    memset( line2, 0, 80 );
-    sprintf( line1, "   %s -f <filename> -o file1.wav", exename );
+    char line1[ 100 ];
+    char line2[ 100 ];
+    char line3[ 100 ];
+    char line4[ 100 ];
+    memset( line1, 0, sizeof(line1) );
+    memset( line2, 0, sizeof(line2) );
+    memset( line3, 0, sizeof(line3) );
+    memset( line4, 0, sizeof(line4) );
+    sprintf( line1, "   %s -f ray_bradbury.txt -o ray_bradbury.wav", exename );
     sprintf( line2, "   echo \"Mary had a little lamb\" | %s --play", exename );
-    sprintf( line3, "   %s -i \"Once upon a midnight dreary\" -v en-US --speed 0.8 --pitch 1.8 -p", exename );
+    sprintf( line3, "   %s -i \"Once upon a midnight dreary\" -v en-US --speed 0.8 --pitch 1.8 -w -p", exename );
+    sprintf( line4, "   echo \"Brave Ulysses\" | %s -c | play -r 16k -L -t raw -e signed -b 16 -c 1 -", exename );
 
     struct help {
         const char *arg;
@@ -414,6 +418,7 @@ void Nano::PrintUsage() {
         { line1, " " },
         { line2, " " },
         { line3, " " },
+        { line4, " " },
         { " ", " " },
     };
 

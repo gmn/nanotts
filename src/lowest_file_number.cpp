@@ -1,9 +1,15 @@
 
 /*
  *
- * This is a helper script for writing numbered filenames.
- * To write an auto generated filename safely without overwriting previously written files,
- *   we have to check for files with the current prefix so we dont over write them.
+ * This is a helper script for writing auto-generated, numbered filenames
+ *  safely without overwriting previously written files.
+ *
+ * We check for files with the prefix and increment the number
+ *  found on them, returning the new integer to the caller for creation
+ *  of the next filename in the series.
+ *
+ * TODO: should also take a Directory as part of the inputs, though I
+ *      suppose this could be included in the prefix.
  *
  */
 
