@@ -3,6 +3,18 @@ NanoTTS
 
 Speech synthesizer commandline utility that improves pico2wave, included with SVOX PicoTTS
 
+## Update, December 2018
+
+- Cleaned up the interface. All outputs must be explicitly specified now.
+- Most inputs are mandatorily specified, all but trailing words. `nanotts "trailing words"` counts as an input, having the same effect as `nanotts -i "trailing words"`.
+- Removed the mandatory libao linkage which has caused problems on systems that don't include it in the default distribution packages.
+- Changed the playback module to ALSA.
+- Alsa linkage is optional. `make noalsa` builds without alsa. WAVE output still functions.
+- All outputs can be multiplexed at the same time. You can literally stream the bytes, write a WAVE and playback the stream at the same time. `nanotts -w -p -c ` accomplishes this.
+
+### Planned
+- Windows Build
+
 
 ## Goal
 -----

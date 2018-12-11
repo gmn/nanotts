@@ -9,7 +9,8 @@ PICO_LANG_ROOT := /usr/share/pico
 PICO_LANG_LOCATION := $(PICO_LANG_ROOT)/lang/
 
 #LINKER_FLAGS := -lasound -lao
-LINKER_FLAGS := -lasound -lm
+#LINKER_FLAGS := -lasound -lm
+LINKER_FLAGS := -lm
 
 all: $(PROGRAM)
 
@@ -26,21 +27,38 @@ OBJECTS = \
 
 
 
-ALSA := $(OBJECTS_DIR)/Player_Alsa.o
+ALSA_OBJECT := $(OBJECTS_DIR)/Player_Alsa.o
+ALSA_SOURCE := src/Player_Alsa.cpp
 
+
+ifeq ($(MAKECMDGOALS),noalsa)
+else ifeq ($(MAKECMDGOALS),noalsa debug)
+else ifeq ($(MAKECMDGOALS),debug noalsa)
+else
+    OBJECTS += $(ALSA_OBJECT)
+    CFLAGS += -D_USE_ALSA
+    LINKER_FLAGS := -lasound -lm
+endif
 
 ifeq ($(MAKECMDGOALS),debug)
+    override CFLAGS += $(CFLAGS_DEBUG)
+else ifeq ($(MAKECMDGOALS),debug noalsa)
+    override CFLAGS += $(CFLAGS_DEBUG)
+else ifeq ($(MAKECMDGOALS),noalsa debug)
     override CFLAGS += $(CFLAGS_DEBUG)
 else
     override CFLAGS += $(CFLAGS_OPT)
 endif
 
 
-$(ALSA):
-	g++ $(CFLAGS) -c -o $(ALSA) src/Player_Alsa.cpp -lasound
+.PHONY: noalsa
+noalsa: $(PROGRAM)
+
+$(ALSA_OBJECT): $(ALSA_SOURCE)
+	g++ $(CFLAGS) -c -o $@ $^ -lasound
 
 $(OBJECTS_DIR)/%.o: ./src/%.cpp
-	g++ -I. -I./svoxpico $(CFLAGS) -c $^ -o $@
+	g++ -I. -I./svoxpico $(CFLAGS) -c $^ -o $@  $(LINKER_FLAGS)
 
 $(OBJECTS_DIR):
 	@[ -d $(OBJECTS_DIR) ] || mkdir $(OBJECTS_DIR)
@@ -48,14 +66,14 @@ $(OBJECTS_DIR):
 $(PICO_LIBRARY):
 	cd svoxpico; ./autogen.sh && ./configure && make
 
-$(PROGRAM): $(PICO_LIBRARY) $(OBJECTS_DIR) $(ALSA) $(OBJECTS)
-	g++ -L./svoxpico/.libs $(ALSA) $(OBJECTS) $(PICO_LIBRARY) $(CFLAGS) -o $(PROGRAM) $(LINKER_FLAGS)
+$(PROGRAM): $(PICO_LIBRARY) $(OBJECTS_DIR) $(OBJECTS)
+	g++ -L./svoxpico/.libs $(OBJECTS) $(PICO_LIBRARY) $(CFLAGS) -o $(PROGRAM) $(LINKER_FLAGS)
 
-debug: $(PICO_LIBRARY) $(OBJECTS_DIR) $(ALSA) $(OBJECTS)
-	g++ -L./svoxpico/.libs $(ALSA) $(OBJECTS) $(PICO_LIBRARY) $(CFLAGS) -o $(PROGRAM) $(LINKER_FLAGS)
+debug: $(PICO_LIBRARY) $(OBJECTS_DIR) $(OBJECTS)
+	g++ -L./svoxpico/.libs $(OBJECTS) $(PICO_LIBRARY) $(CFLAGS) -o $(PROGRAM) $(LINKER_FLAGS)
 
 clean:
-	@for file in $(ALSA) $(OBJECTS) $(PROGRAM) pico2wave.o pico2wave; do if [ -f $${file} ]; then rm $${file}; echo rm $${file}; fi; done
+	@for file in $(OBJECTS) $(PROGRAM) pico2wave.o pico2wave; do if [ -f $${file} ]; then rm $${file}; echo rm $${file}; fi; done
 	@if [ -d $(OBJECTS_DIR) ]; then rmdir $(OBJECTS_DIR) ; fi
 	@echo "use \"make distclean\" to also cleanup svoxpico directory"
 

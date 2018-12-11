@@ -37,9 +37,11 @@ extern "C" {
 
 #include "PicoVoices.h"
 #include "mmfile.h"
-//#include "player_ao.h"
-#include "Player_Alsa.h"
 #include "StreamHandler.h"
+
+#ifdef _USE_ALSA
+  #include "Player_Alsa.h"
+#endif
 
 #define PICO_DEFAULT_SPEED 0.88f
 #define PICO_DEFAULT_PITCH 1.05f
@@ -721,12 +723,16 @@ void Nano::SetListenerStdout() {
     listener.setCallback( &Nano::write_short_to_stdout );
 }
 void Nano::SetListenerPlayback() {
+#ifdef _USE_ALSA
     streamHandler.player = new Player_Alsa();
+#endif
     streamHandler.StreamOpen();
     listener.setCallback( &Nano::write_short_to_playback );
 }
 void Nano::SetListenerPlaybackAndStdout() {
+#ifdef _USE_ALSA
     streamHandler.player = new Player_Alsa();
+#endif
     streamHandler.StreamOpen();
     listener.setCallback( &Nano::write_short_to_playback_and_stdout );
 }
