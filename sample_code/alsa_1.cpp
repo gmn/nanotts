@@ -2,7 +2,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <alsa/asoundlib.h>
-      
+
 main (int argc, char *argv[])
 {
     int i;
@@ -10,22 +10,24 @@ main (int argc, char *argv[])
     short buf[128];
     snd_pcm_t *playback_handle;
     snd_pcm_hw_params_t *hw_params;
-    unsigned int rate = 44100;
     int dir = 0;
 
+    unsigned int rate = 16000;
+    unsigned int channels = 1;
+
     if ((err = snd_pcm_open (&playback_handle, argv[1], SND_PCM_STREAM_PLAYBACK, 0)) < 0) {
-        fprintf (stderr, "cannot open audio device %s (%s)\n", 
+        fprintf (stderr, "cannot open audio device %s (%s)\n",
              argv[1],
              snd_strerror (err));
         exit (1);
     }
-       
+
     if ((err = snd_pcm_hw_params_malloc (&hw_params)) < 0) {
         fprintf (stderr, "cannot allocate hardware parameter structure (%s)\n",
              snd_strerror (err));
         exit (1);
     }
-             
+
     if ((err = snd_pcm_hw_params_any (playback_handle, hw_params)) < 0) {
         fprintf (stderr, "cannot initialize hardware parameter structure (%s)\n",
              snd_strerror (err));
@@ -50,7 +52,7 @@ main (int argc, char *argv[])
         exit (1);
     }
 
-    if ((err = snd_pcm_hw_params_set_channels (playback_handle, hw_params, 2)) < 0) {
+    if ((err = snd_pcm_hw_params_set_channels (playback_handle, hw_params, channels )) < 0) {
         fprintf (stderr, "cannot set channel count (%s)\n",
              snd_strerror (err));
         exit (1);

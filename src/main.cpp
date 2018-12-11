@@ -29,9 +29,6 @@
 #include <unistd.h>
 #include <sys/mman.h> // mmap
 
-#include <ao/ao.h>
-
-
 extern "C" {
 #include "svoxpico/picoapi.h"
 #include "svoxpico/picoapid.h"
@@ -40,19 +37,14 @@ extern "C" {
 
 #include "PicoVoices.h"
 #include "mmfile.h"
-#include "player_ao.h"
+//#include "player_ao.h"
+#include "Player_Alsa.h"
+#include "StreamHandler.h"
 
 #define PICO_DEFAULT_SPEED 0.88f
 #define PICO_DEFAULT_PITCH 1.05f
 #define PICO_DEFAULT_VOLUME 1.00f
 
-
-// #ifndef _PICO_LANG_DIR
-// #define _PICO_LANG_DIR 1
-// const char * PICO_LANG_DIR = "./lang/";
-// #else
-// const char * PICO_LANG_DIR = _PICO_LANG_DIR ;
-// #endif
 
 // searching these paths
 const char * lingware_paths[ 2 ] = { "./lang", "/usr/share/pico/lang" };
@@ -285,8 +277,7 @@ private:
     void                write_short_to_playback_and_stdout( short * data, unsigned int shorts );
 
     Boilerplate         modifiers;
-
-    AudioPlayer_AO      streamPlayer;
+    StreamHandler       streamHandler;
 
 public:
     bool                silence_output;
@@ -730,13 +721,13 @@ void Nano::SetListenerStdout() {
     listener.setCallback( &Nano::write_short_to_stdout );
 }
 void Nano::SetListenerPlayback() {
-    streamPlayer.DefaultPCMFormat();
-    streamPlayer.pcmSetup();
+    streamHandler.player = new Player_Alsa();
+    streamHandler.StreamOpen();
     listener.setCallback( &Nano::write_short_to_playback );
 }
 void Nano::SetListenerPlaybackAndStdout() {
-    streamPlayer.DefaultPCMFormat();
-    streamPlayer.pcmSetup();
+    streamHandler.player = new Player_Alsa();
+    streamHandler.StreamOpen();
     listener.setCallback( &Nano::write_short_to_playback_and_stdout );
 }
 
@@ -800,14 +791,14 @@ void Nano::write_short_to_stdout( short * data, unsigned int shorts ) {
 
 void Nano::write_short_to_playback( short * data, unsigned int shorts ) {
     if ( out_mode & OUT_PLAYBACK )
-        streamPlayer.pcmPlay( (char*)data, shorts * 2 );
+        streamHandler.SubmitFrames( (unsigned char *)data, shorts );
 }
 
 void Nano::write_short_to_playback_and_stdout( short * data, unsigned int shorts ) {
     if ( out_mode & OUT_STDOUT )
         fwrite( data, 2, shorts, out_fp );
     if ( out_mode & OUT_PLAYBACK )
-        streamPlayer.pcmPlay( (char*)data, shorts * 2 );
+        streamHandler.SubmitFrames( (unsigned char*)data, shorts );
 }
 
 Listener<short> * Nano::getListener() {

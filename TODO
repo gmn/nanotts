@@ -1,15 +1,23 @@
 NEW TODO 2018-12-07
 
-- write Alsa module
+- change project name to NanoTTS (exe is still nanotts)
+
+- write Sound Playback Interface
+    - OpenAudioDevice()
+    - SubmitSamples()
+    - CloseAudioDevice()
+- write Alsa module that exports this interface
 - add ./configure script that detects alsa, --enable-alsa, --disable-alsa,
-- write a Dummy Interface, Alsa exports this interface, the configure script determines
+    - the configure script determines
     which one to build. The main code always calls "SubmitSamples()", the dummy
     does nothing, Alsa plays the samples.
-- --version flag reports the MAJOR.MINOR.PATH and OUTPUT_MODULE_LINKED_IN
+- -v, --version flag reports the MAJOR.MINOR.PATH and OUTPUT_MODULE_LINKED_IN
+- Windows Support
+
+
 - gprof, valgrind
 - write man page
 
-- Windows Support
 - alsa? pulse audio?
 
 
@@ -21,7 +29,7 @@ X make install, make uninstall
 X dynamic lingware detection    (install won't really work without this)
 X PLAYBACK: stream PCM to audio device instead of writing file and reading it
 
-- make libao detection dynamic
+S make libao detection dynamic
     - compile player_ao as a dynamic lib
         - (can this be made to allow failure, or check deps first?)
     - loader function that if dlopen("ao") succeeds, calls dlopen("player_ao") to load player class
