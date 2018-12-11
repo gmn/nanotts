@@ -418,7 +418,7 @@ void Nano::PrintUsage() {
     unsigned long long int size = *(&help_lines + 1) - help_lines;
 
     for ( unsigned int i = 0; i < size; i++ ) {
-        printf( "%-22s%s\n", help_lines[i].arg, help_lines[i].desc );
+        printf( "%-24s%s\n", help_lines[i].arg, help_lines[i].desc );
     }
 }
 
@@ -457,7 +457,6 @@ int Nano::check_args()
     {
         // PRINT HELP
         if ( strcmp( my_argv[i], "-h" ) == 0 || strcmp( my_argv[i], "--help" ) == 0 ) {
-            PrintUsage();
             return -1;
         }
 
@@ -1477,12 +1476,6 @@ int main( int argc, const char ** argv )
     pico.cleanup();
 
     //
-//    if ( nano.playOutput() ) {
-//        AudioPlayer_AO * player = new AudioPlayer_AO();
-//        player->OpenAndPlay( nano.outFilename() );
-//        delete player;
-//    }
-
     pico.destroy();
     nano.destroy();
     return 0;

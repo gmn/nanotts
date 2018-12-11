@@ -86,7 +86,7 @@ pico: $(PICO_LIBRARY)
 
 both: $(PROGRAM) pico
 
-install: $(PROGRAM)
+install:
 	install -m 0755 $(PROGRAM) /usr/bin/
 	@if [ ! -d $(PICO_LANG_LOCATION) ]; then echo mkdir -p -m 777 $(PICO_LANG_LOCATION); mkdir -p -m 777 $(PICO_LANG_LOCATION); fi
 	@for file in ./lang/* ; do echo install -m 0644 $${file} $(PICO_LANG_LOCATION); install -m 0644 $${file} $(PICO_LANG_LOCATION); done

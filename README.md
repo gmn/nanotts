@@ -19,19 +19,19 @@ Speech synthesizer commandline utility that improves pico2wave, included with SV
 ### Usage
 ```
 usage: nanotts [options]
-   -h, --help         Displays this help. (overrides other input)
-   -v, --voice <voice>Select voice. (Default: en-GB)
-   -l <directory>     Set Lingware voices directory. (defaults: "./lang", "/usr/share/pico/lang/")
-   -i <text>          Input. (Text must be correctly quoted)
-   -f <filename>      Filename to read input from
-   -o <filename>      Write output to WAV/PCM file (enables WAV output)
-   -w, --wav          Write output to WAV file, will generate filename if '-o' option not provided
-   -p, --play         Play audio output
-   -m, --no-play      do NOT play output on PC's soundcard
-   -c                 Send raw PCM output to stdout
-   --speed <0.2-5.0>  change voice speed
-   --pitch <0.5-2.0>  change voice pitch
-   --volume <0.0-5.0> change voice volume (>1.0 may result in degraded quality)
+   -h, --help           Displays this help. (overrides other input)
+   -v, --voice <voice>  Select voice. (Default: en-GB)
+   -l <directory>       Set Lingware voices directory. (defaults: "./lang", "/usr/share/pico/lang/")
+   -i <text>            Input. (Text must be correctly quoted)
+   -f <filename>        Filename to read input from
+   -o <filename>        Write output to WAV/PCM file (enables WAV output)
+   -w, --wav            Write output to WAV file, will generate filename if '-o' option not provided
+   -p, --play           Play audio output
+   -m, --no-play        do NOT play output on PC's soundcard
+   -c                   Send raw PCM output to stdout
+   --speed <0.2-5.0>    change voice speed
+   --pitch <0.5-2.0>    change voice pitch
+   --volume <0.0-5.0>   change voice volume (>1.0 may result in degraded quality)
 
 Possible Voices:
    en-US, en-GB, de-DE, es-ES, fr-FR, it-IT
@@ -41,7 +41,6 @@ Examples:
    echo "Mary had a little lamb" | nanotts --play
    nanotts -i "Once upon a midnight dreary" -v en-US --speed 0.8 --pitch 1.8 -w -p
    echo "Brave Ulysses" | nanotts -c | play -r 16k -L -t raw -e signed -b 16 -c 1 -
-
 ```
 
 
