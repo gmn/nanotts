@@ -66,14 +66,14 @@ $(OBJECTS_DIR):
 $(PICO_LIBRARY):
 	cd svoxpico; ./autogen.sh && ./configure && make
 
-$(PROGRAM): $(PICO_LIBRARY) $(OBJECTS_DIR) $(OBJECTS)
+$(PROGRAM): update_git_version $(PICO_LIBRARY) $(OBJECTS_DIR) $(OBJECTS)
 	g++ -L./svoxpico/.libs $(OBJECTS) $(PICO_LIBRARY) $(CFLAGS) -o $(PROGRAM) $(LINKER_FLAGS)
 
-debug: $(PICO_LIBRARY) $(OBJECTS_DIR) $(OBJECTS)
+debug: update_git_version $(PICO_LIBRARY) $(OBJECTS_DIR) $(OBJECTS)
 	g++ -L./svoxpico/.libs $(OBJECTS) $(PICO_LIBRARY) $(CFLAGS) -o $(PROGRAM) $(LINKER_FLAGS)
 
 clean:
-	@for file in $(OBJECTS) $(PROGRAM) pico2wave.o pico2wave; do if [ -f $${file} ]; then rm $${file}; echo rm $${file}; fi; done
+	@for file in $(OBJECTS) $(PROGRAM) pico2wave.o pico2wave git_version.h release_version.h; do if [ -f $${file} ]; then rm $${file}; echo rm $${file}; fi; done
 	@if [ -d $(OBJECTS_DIR) ]; then rmdir $(OBJECTS_DIR) ; fi
 	@echo "use \"make distclean\" to also cleanup svoxpico directory"
 
@@ -94,4 +94,7 @@ install:
 uninstall:
 	@if [ -e /usr/bin/$(PROGRAM) ]; then echo rm /usr/bin/$(PROGRAM); rm /usr/bin/$(PROGRAM); fi
 	@if [ -e $(PICO_LANG_ROOT) ]; then echo rm -rf $(PICO_LANG_ROOT); rm -rf $(PICO_LANG_ROOT) ; fi
+
+update_git_version:
+	@./freshen_git_version.sh
 

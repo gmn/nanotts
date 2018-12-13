@@ -51,9 +51,27 @@ extern "C" {
 // searching these paths
 const char * lingware_paths[ 2 ] = { "./lang", "/usr/share/pico/lang" };
 
-#define GLOBAL_PREFIX "nanotts-output-"
-#define GLOBAL_SUFFIX ".wav"
+#define FILE_OUTPUT_PREFIX "nanotts-output-"
+#define FILE_OUTPUT_SUFFIX ".wav"
 #define FILENAME_NUMBERING_LEADING_ZEROS 4
+
+// software version information
+#define CANONICAL_NAME      "nanotts"
+#define CONFIG_DIR_NAME     ".nanotts"
+#define VERSION_MAJOR       "0"
+#define CON1                "."
+#define VERSION_MINOR       "85"
+#define CON2                "-"
+// a = alpha, b = beta, rc = release-candidate, r = release
+#define RELEASE_TYPE        "rc"
+#include "release_version.h" // RELEASE_VERSION, increments every build
+#define SOFTWARE_VERSION VERSION_MAJOR CON1 VERSION_MINOR CON2 RELEASE_TYPE RELEASE_VERSION
+#ifdef _USE_ALSA
+  #define VERSIONED_NAME CANONICAL_NAME "-" SOFTWARE_VERSION "-alsa"
+#else
+  #define VERSIONED_NAME CANONICAL_NAME "-" SOFTWARE_VERSION
+#endif
+
 
 // forward declarations
 int GetNextLowestFilenameNumber( const char * prefix, const char * suffix, int zeropad );
@@ -314,8 +332,8 @@ public:
 Nano::Nano( const int i, const char ** v ) : my_argc(i), my_argv(v), listener(this) {
     voice = 0;
     langfiledir = 0;
-    sprintf( prefix, GLOBAL_PREFIX );
-    sprintf( suffix, GLOBAL_SUFFIX );
+    sprintf( prefix, FILE_OUTPUT_PREFIX );
+    sprintf( suffix, FILE_OUTPUT_SUFFIX );
     out_filename = 0;
     in_filename = 0;
     words = 0;
@@ -402,6 +420,7 @@ void Nano::PrintUsage() {
         { "   --speed <0.2-5.0>", "change voice speed" },
         { "   --pitch <0.5-2.0>", "change voice pitch" },
         { "   --volume <0.0-5.0>", "change voice volume (>1.0 may result in degraded quality)" },
+        { "   --version", "Displays version information about this program" },
 //        { "  --files", "set multiple input files" },
         { " ", " " },
         { "Possible Voices: ", " " },
@@ -458,6 +477,10 @@ int Nano::check_args()
         // PRINT HELP
         if ( strcmp( my_argv[i], "-h" ) == 0 || strcmp( my_argv[i], "--help" ) == 0 ) {
             return -1;
+        }
+        if ( strcmp( my_argv[i], "--version" ) == 0 ) {
+            fprintf( stderr, "using: %s\n", VERSIONED_NAME );
+            return -666;
         }
 
         // INPUTS
@@ -1425,9 +1448,14 @@ int main( int argc, const char ** argv )
 
     NanoSingleton & nano = NanoSingleton::instance();
 
+    int res;
+
     //
-    if ( nano.check_args() < 0 ) {
+    if ( (res = nano.check_args()) < 0 ) {
         nano.destroy();
+        if ( res == -666 ) {
+            return 0;
+        }
         nano.PrintUsage();
         return 127; // command not found
     }

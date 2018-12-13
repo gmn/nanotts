@@ -1,17 +1,20 @@
 NEW TODO 2018-12-07
 
-- change project name to NanoTTS (exe is still nanotts)
+s change project name to NanoTTS (exe is still nanotts)
 
-- write Sound Playback Interface
+X write Sound Playback Interface
     - OpenAudioDevice()
     - SubmitSamples()
     - CloseAudioDevice()
-- write Alsa module that exports this interface
-- add ./configure script that detects alsa, --enable-alsa, --disable-alsa,
+X write Alsa module that exports this interface
+S add ./configure script that detects alsa, --enable-alsa, --disable-alsa,
     - the configure script determines
     which one to build. The main code always calls "SubmitSamples()", the dummy
     does nothing, Alsa plays the samples.
-- -v, --version flag reports the MAJOR.MINOR.PATH and OUTPUT_MODULE_LINKED_IN
+s -v, --version flag reports the MAJOR.MINOR.PATH and OUTPUT_MODULE_LINKED_IN
+
+- move player_ao over to new format
+
 - Windows Support
 
 
