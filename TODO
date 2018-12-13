@@ -1,5 +1,17 @@
 NEW TODO 2018-12-07
 
+
+- TEXINFO documentation (like CGDB)
+- mailing list
+- man page
+
+- move player_ao over to new format, just to do it.
+
+- Windows Build
+- gprof, valgrind
+
+
+
 s change project name to NanoTTS (exe is still nanotts)
 
 X write Sound Playback Interface
@@ -12,18 +24,6 @@ S add ./configure script that detects alsa, --enable-alsa, --disable-alsa,
     which one to build. The main code always calls "SubmitSamples()", the dummy
     does nothing, Alsa plays the samples.
 s -v, --version flag reports the MAJOR.MINOR.PATH and OUTPUT_MODULE_LINKED_IN
-
-- move player_ao over to new format
-
-- Windows Support
-
-
-- gprof, valgrind
-- write man page
-
-- alsa? pulse audio?
-
-
 
 X all inputs and outputs should be explicitly specified.
     x WAV output optional
