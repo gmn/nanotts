@@ -73,7 +73,7 @@ debug: update_build_version $(PICO_LIBRARY) $(OBJECTS_DIR) $(OBJECTS)
 	g++ -L./svoxpico/.libs $(OBJECTS) $(PICO_LIBRARY) $(CFLAGS) -o $(PROGRAM) $(LINKER_FLAGS)
 
 clean:
-	@for file in $(OBJECTS) $(PROGRAM) pico2wave.o pico2wave build_version.h release_version.h; do if [ -f $${file} ]; then rm $${file}; echo rm $${file}; fi; done
+	@for file in $(OBJECTS) $(PROGRAM) pico2wave.o pico2wave build_version.h; do if [ -f $${file} ]; then rm $${file}; echo rm $${file}; fi; done
 	@if [ -d $(OBJECTS_DIR) ]; then rmdir $(OBJECTS_DIR) ; fi
 	@echo "use \"make distclean\" to also cleanup svoxpico directory"
 
