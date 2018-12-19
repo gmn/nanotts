@@ -1,1 +1,1 @@
-#define RELEASE_VERSION "5"
+#define RELEASE_VERSION "6"
