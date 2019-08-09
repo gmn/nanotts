@@ -60,10 +60,10 @@ const char * lingware_paths[ 2 ] = { "./lang", "/usr/share/pico/lang" };
 #define CONFIG_DIR_NAME     ".nanotts"
 #define VERSION_MAJOR       "0"
 #define CON1                "."
-#define VERSION_MINOR       "85"
+#define VERSION_MINOR       "9"
 #define CON2                "-"
 // a = alpha, b = beta, rc = release-candidate, r = release
-#define RELEASE_TYPE        "rc"
+#define RELEASE_TYPE        "a"
 #include "release_version.h" // RELEASE_VERSION, increments every build
 #define SOFTWARE_VERSION VERSION_MAJOR CON1 VERSION_MINOR CON2 RELEASE_TYPE RELEASE_VERSION
 #ifdef _USE_ALSA
@@ -276,7 +276,7 @@ private:
 
     char *              voice;
     char *              langfiledir;
-    char                prefix[ 100 ];
+    char                prefix[ 256 ];
     char                suffix[ 100 ];
     char *              out_filename;
     char *              in_filename;
@@ -306,7 +306,7 @@ public:
     virtual ~Nano();
 
     void PrintUsage();
-    int check_args();
+    int parse_commandline_arguments();
     int setup_input_output();
     int verify_input_output();
 
@@ -417,6 +417,9 @@ void Nano::PrintUsage() {
         { "   -p, --play ", "Play audio output" },
         { "   -m, --no-play", "do NOT play output on PC's soundcard" },
         { "   -c ", "Send raw PCM output to stdout" },
+        { "   --prefix", "Set the file prefix (eg. \"MyRecording-\")." },
+        { "", "Generated files will be auto-numbered." },
+        { "", "Good for running multiple times with different inputs" },
         { "   --speed <0.2-5.0>", "change voice speed" },
         { "   --pitch <0.5-2.0>", "change voice pitch" },
         { "   --volume <0.0-5.0>", "change voice volume (>1.0 may result in degraded quality)" },
@@ -454,7 +457,7 @@ char * Nano::copy_arg( int index )
     return buf;
 }
 
-int Nano::check_args()
+int Nano::parse_commandline_arguments()
 {
     // inputs and especially output are explicit
     in_mode = IN_NOT_SET;
@@ -479,7 +482,7 @@ int Nano::check_args()
             return -1;
         }
         if ( strcmp( my_argv[i], "--version" ) == 0 ) {
-            fprintf( stderr, "using: %s\n", VERSIONED_NAME );
+            fprintf( stderr, "%s\n", VERSIONED_NAME );
             return -666;
         }
 
@@ -554,7 +557,14 @@ int Nano::check_args()
             silence_output = false;
             out_mode |= OUT_PLAYBACK;
         }
-
+        else if ( strcmp( my_argv[i], "--prefix" ) == 0 ) {
+            WARN_UNMATCHED_INPUTS();
+            out_mode |= OUT_SINGLE_FILE;
+            if ( i + 1 >= my_argc )
+                return -1;
+            strncpy( prefix, my_argv[i+1], sizeof(prefix) );
+            ++i;
+        }
 
         // SVOX
         else if ( strcmp( my_argv[i], "-v" ) == 0 || strcmp( my_argv[i], "--voice" ) == 0 ) {
@@ -1235,7 +1245,7 @@ int Pico::process()
     if ( pico_writeWavPcm ) {
         picoos_Common common = (picoos_Common) pico_sysGetCommon(picoSystem);
         if ( TRUE != (done=picoos_sdfOpenOut(common, &sdOutFile, (picoos_char *)out_filename, SAMPLE_FREQ_16KHZ, PICOOS_ENC_LIN)) ) {
-            fprintf( stderr, "Cannot open output wave file\n" );
+            fprintf( stderr, "Cannot open output wave file: %s\n", out_filename );
             return -1;
         }
     }
@@ -1451,7 +1461,7 @@ int main( int argc, const char ** argv )
     int res;
 
     //
-    if ( (res = nano.check_args()) < 0 ) {
+    if ( (res = nano.parse_commandline_arguments()) < 0 ) {
         nano.destroy();
         if ( res == -666 ) {
             return 0;
