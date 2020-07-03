@@ -55,22 +55,22 @@ endif
 noalsa: $(PROGRAM)
 
 $(ALSA_OBJECT): $(ALSA_SOURCE)
-	g++ $(CFLAGS) -c -o $@ $^ -lasound
+	$(CXX) $(CFLAGS) -c -o $@ $^ -lasound
 
 $(OBJECTS_DIR)/%.o: ./src/%.cpp
-	g++ -I. -I./svoxpico $(CFLAGS) -c $^ -o $@  $(LINKER_FLAGS)
+	$(CXX) -I. -I./svoxpico $(CFLAGS) -c $^ -o $@  $(LINKER_FLAGS)
 
 $(OBJECTS_DIR):
 	@[ -d $(OBJECTS_DIR) ] || mkdir $(OBJECTS_DIR)
 
 $(PICO_LIBRARY):
-	cd svoxpico; ./autogen.sh && ./configure && make
+	cd svoxpico; ./autogen.sh && ./configure --host `uname -m` && make -j
 
 $(PROGRAM): update_build_version $(PICO_LIBRARY) $(OBJECTS_DIR) $(OBJECTS)
-	g++ -L./svoxpico/.libs $(OBJECTS) $(PICO_LIBRARY) $(CFLAGS) -o $(PROGRAM) $(LINKER_FLAGS)
+	$(CXX) -L./svoxpico/.libs $(OBJECTS) $(PICO_LIBRARY) $(CFLAGS) -o $(PROGRAM) $(LINKER_FLAGS)
 
 debug: update_build_version $(PICO_LIBRARY) $(OBJECTS_DIR) $(OBJECTS)
-	g++ -L./svoxpico/.libs $(OBJECTS) $(PICO_LIBRARY) $(CFLAGS) -o $(PROGRAM) $(LINKER_FLAGS)
+	$(CXX) -L./svoxpico/.libs $(OBJECTS) $(PICO_LIBRARY) $(CFLAGS) -o $(PROGRAM) $(LINKER_FLAGS)
 
 clean:
 	@for file in $(OBJECTS) $(PROGRAM) pico2wave.o pico2wave build_version.h; do if [ -f $${file} ]; then rm $${file}; echo rm $${file}; fi; done
@@ -81,8 +81,8 @@ distclean: clean
 	cd svoxpico; make clean ; ./clean.sh
 
 pico: $(PICO_LIBRARY)
-	gcc -I. -I./svoxpico -Wall -g $(OPT_FLAG) -c -o pico2wave.o src/pico2wave.c
-	gcc -I./svoxpico -Wall -g $(OPT_FLAG) pico2wave.o svoxpico/.libs/libttspico.a -o pico2wave -lm -lpopt
+	$(CC) -I. -I./svoxpico -Wall -g $(OPT_FLAG) -c -o pico2wave.o src/pico2wave.c
+	$(CC) -I./svoxpico -Wall -g $(OPT_FLAG) pico2wave.o svoxpico/.libs/libttspico.a -o pico2wave -lm -lpopt
 
 both: $(PROGRAM) pico
 
