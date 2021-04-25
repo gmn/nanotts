@@ -16,6 +16,13 @@ Speech synthesizer commandline utility that improves pico2wave, included with SV
 - Windows Build
 
 
+### Installation
+1. `git clone https://github.com/gmn/nanotts`
+2. `cd nanotts`
+3. `make`
+4. `sudo make install`
+
+
 ### Usage
 ```
 usage: nanotts [options]
